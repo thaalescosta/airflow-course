@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: One row per extracted order, with stable columns for downstream models.
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        data_tests:
+          - not_null

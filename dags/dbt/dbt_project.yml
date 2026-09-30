@@ -1,0 +1,17 @@
+name: airflow_course
+version: 1.0.0
+config-version: 2
+
+profile: airflow_course
+
+model-paths: ["models"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  airflow_course:
+    staging:
+      +materialized: table
+      +schema: staging
