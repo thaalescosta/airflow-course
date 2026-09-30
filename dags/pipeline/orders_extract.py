@@ -1,19 +1,22 @@
 """The pipeline's extraction logic, with no Airflow in it.
 
-Why this file exists. Extraction was originally written inside
-``dags/pipeline/orders_ingestion.py``, next to the DAG that calls it. That is
-fine for exactly one DAG and wrong for two: when the nightly KPI pipeline needs
-the same extraction, the two options are to duplicate a hundred lines of window
+Why this file exists. Extraction was originally written inline in the DAG file,
+next to the tasks that called it. That is fine while the logic has one caller and
+it does not survive a second one: when the nightly KPI pipeline arrived needing
+the same extraction, the options were to duplicate a hundred lines of window
 selection, pagination and upsert, or to reach across DAG files and import
-private helpers out of one. Both are worse than the obvious thing, which is to
-put the logic here and let each DAG be a thin wrapper.
+private helpers out of one. Both are worse than putting the logic here. The two
+DAGs that forced the extraction then collapsed into ``nightly_order_kpis.py``,
+which is the single pipeline — so this file now has one caller again, and it is
+still not inlined, because the reason it was pulled out was never only the caller
+count.
 
 The module boundary is also the boundary of the course's second test seam.
 Everything here is a pure function of its arguments plus the network and the
 warehouse, so it can be tested without a scheduler — which is what
 ``tests/test_orders_ingestion.py`` does. Airflow-specific concerns (the
 connection id, ``get_current_context``, the DAG decorators) stay in the DAG
-files and nowhere else.
+file and nowhere else.
 
 Nothing here knows what a KPI is. Extraction moves rows; dbt decides what they
 mean. That separation is why the pipeline assertion can compute its expectation

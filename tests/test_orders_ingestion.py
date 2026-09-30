@@ -17,12 +17,22 @@ end-to-end assertion that happened to use a window with no repeated order.
 The boundary that keeps this honest is ``dags/pipeline/orders_extract.py`` being
 Airflow-free. A module that imports ``airflow.sdk`` cannot be imported here
 without a scheduler in the picture, so anything testable at this seam had to be
-written to not need one. The DAG files are left as wiring.
+written to not need one. The DAG file is left as wiring.
 
 The function names here are the module's public names. They were private
 (``_fetch_orders``) and imported out of a DAG file, which is what an extraction
-shared by two DAGs forced into existence: ``dags/pipeline/orders_extract.py`` now
-holds the logic and both DAGs are wrappers over it.
+shared by two DAGs forced into existence: ``dags/pipeline/orders_extract.py``
+holds the logic and ``nightly_order_kpis.py`` wires it up. Note that the two DAGs
+have since collapsed into one, so there is no longer a second caller to share
+with — the module stayed out of the DAG file because the boundary is the test
+seam, not because a second DAG needed the same code.
+
+And this file's name, which outlasted the DAG it was named after. It is named for
+the ingestion, not for ``dags/pipeline/orders_extract.py``: what is under test is
+the pipeline stage that moves orders from the API into the warehouse, and that
+stage survives every refactor of the module that implements it. Renaming it to
+``test_orders_extract.py`` would match the current file and start lying again the
+moment that file is split or joined.
 """
 
 from __future__ import annotations

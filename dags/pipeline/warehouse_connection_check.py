@@ -1,9 +1,17 @@
-"""First hand-written DAG of the continuous project: prove the feedback loop.
+"""Prove the feedback loop: Airflow can be told apart from the environment.
 
 This DAG exists to close the loop that every later lesson depends on — that
 Airflow can be told apart from the environment it runs in. It reads the course
 warehouse's credential from the Airflow connection store, connects to the
 warehouse, and round-trips one row.
+
+It is a probe, not a stage of the pipeline. `pipeline_nightly_order_kpis` is the
+continuous project and the only DAG here with a timetable; this one has
+`schedule=None`, so nothing ever schedules it, and it writes to its own
+`public.pipeline_health_check` table rather than to anything the pipeline
+assertion reads. That is what keeps it honest to keep it around next to the
+pipeline: it is a different thing, so it cannot double-write the pipeline's data,
+and gate 5 in `tests/assert_pipeline_kpis.py` fails if that ever stops being true.
 
 The secrets boundary is the point of the exercise, so note what is *not* here:
 no host, no port, no database, no role, no password. Every one of those arrives

@@ -9,6 +9,16 @@ ordering in the dependency graph, where Airflow holds it.
 
     orders-api ─▶ extract_and_load_orders ─▶ cosmos_dbt_project ─▶ fct_daily_order_kpis
 
+This file absorbed two predecessors. `pipeline_orders_ingestion` carried the
+extraction task and `pipeline_dbt_transform` carried the Cosmos task group, each
+on its own schedule, which is the arrangement the paragraph above argues
+against — and worse, `pipeline_orders_ingestion` was a second writer to
+`public.orders` on the same timetable as this DAG. It was inert only while
+paused, and "paused" is a row in a local metadata database that no clone
+inherits, so two DAGs extracting one window into one table is what a fresh
+`astro dev start` would have produced. Both files are gone. Splitting this
+again means re-deciding that, not just moving a `@task`.
+
 Three things this file is careful about:
 
 * The window comes from Airflow, not from a constant. A daily schedule runs on

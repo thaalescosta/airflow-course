@@ -91,6 +91,32 @@ ORDERS_API_HOST_URL = "http://127.0.0.1:8010"
 
 NIGHTLY_DAG_ID = "pipeline_nightly_order_kpis"
 
+# The course's DAG set, stated here rather than inferred from the `dags/`
+# directory. This is the one place the assertion claims the course has a single
+# pipeline, and it makes the claim from Airflow's own report of what parsed
+# rather than from a directory listing, so it is still the primary seam's rule:
+# read the state, not the source.
+#
+# Two DAGs used to be here that are not now, and their absence is the reason this
+# list is asserted rather than merely printed. `pipeline_orders_ingestion`
+# carried a second copy of the extraction task, on the same nightly timetable,
+# writing to the same `public.orders` — a second writer that was inert only
+# while paused, and "paused" is a row in a local metadata database that a fresh
+# clone does not inherit. `pipeline_dbt_transform` carried a second Cosmos task
+# group with the same `group_id` over the same dbt models. A second writer to one
+# table is silent when it is idempotent, which is precisely why it needed to be
+# removed rather than left paused.
+#
+# To add a DAG, add it here with a reason. A new scheduled DAG fails gate 5
+# until it is registered, because two scheduled DAGs is the state this assertion
+# exists to rule out.
+EXPECTED_DAGS = {
+    # The continuous project: the one pipeline, and the only scheduled DAG.
+    NIGHTLY_DAG_ID: "the nightly pipeline under assertion",
+    # A connection probe, schedule=None, on its own health-check table.
+    "pipeline_warehouse_connection_check": "the warehouse connection probe",
+}
+
 # The window under assertion. Chosen, not arbitrary:
 #
 #   * It spans 1116 orders, so at the extraction's page size of 1000 the API's
@@ -387,12 +413,12 @@ def gate_data_source_reachable() -> None:
 
 
 # --------------------------------------------------------------------------
-# Gate step 5 - a first DAG parsing
+# Gate step 5 - the DAGs parse, and there is exactly one pipeline
 # --------------------------------------------------------------------------
 
 
-def gate_first_dag_parses() -> None:
-    rule("Gate 5/6  A first DAG parses")
+def gate_one_pipeline_parses() -> None:
+    rule("Gate 5/6  One pipeline, parsed")
 
     import_errors = api_get("/api/v2/importErrors")
     count = import_errors.get("total_entries", len(import_errors.get("import_errors", [])))
@@ -404,7 +430,58 @@ def gate_first_dag_parses() -> None:
         raise GateFailure(f"{count} DAG file(s) failed to import:\n{details}")
     show("import errors", "0")
 
-    dag = api_get(f"/api/v2/dags/{NIGHTLY_DAG_ID}")
+    # The course has one pipeline. Read from the live bundle rather than from the
+    # `dags/` directory: the API resolves DAGs by parsing the files, so a DAG
+    # deleted from git but still registered in the metadatabase does not appear
+    # here — which is what `airflow dags list` will tell you, and why that CLI
+    # and the UI disagree (see reference/environment-baseline.md §7).
+    parsed = api_get("/api/v2/dags?limit=100")
+    found = {row["dag_id"]: row for row in parsed.get("dags", [])}
+    show("dags parsed", len(found))
+
+    unexpected = sorted(set(found) - set(EXPECTED_DAGS))
+    missing = sorted(set(EXPECTED_DAGS) - set(found))
+    if unexpected or missing:
+        problems = []
+        for dag_id in unexpected:
+            row = found[dag_id]
+            scheduled = row.get("timetable_summary")
+            problems.append(
+                f"  unexpected  {dag_id}"
+                + (f"  (scheduled: {scheduled})" if scheduled else "  (unscheduled)")
+                + f"  <- {row.get('fileloc', '?')}"
+            )
+        for dag_id in missing:
+            problems.append(f"  missing      {dag_id}")
+        raise GateFailure(
+            "The course's DAG set is not the one this assertion expects:\n"
+            + "\n".join(problems)
+            + "\n\nA DAG that is not on this list is either a second writer to the "
+            "pipeline's tables, a second scheduler for the dbt project, or a "
+            "half-finished file. The first two are silent when they are "
+            "idempotent, which is why they are ruled out here rather than left "
+            "paused.\nIf the DAG is meant to exist, register it in EXPECTED_DAGS "
+            "in this file with a reason next to it."
+        )
+    for dag_id, why in EXPECTED_DAGS.items():
+        when = "scheduled" if found[dag_id].get("timetable_summary") else "on demand"
+        print(f"      {when:<10}{dag_id}  ({why})")
+
+    # Exactly one timetable in the bundle. This is the load-bearing half of the
+    # check above: a second scheduled DAG is a second nightly run competing for
+    # the same warehouse, whether or not it happens to be paused right now.
+    scheduled = sorted(
+        dag_id for dag_id, row in found.items() if row.get("timetable_summary")
+    )
+    if scheduled != [NIGHTLY_DAG_ID]:
+        raise GateFailure(
+            f"Expected exactly one scheduled DAG ({NIGHTLY_DAG_ID}), found: "
+            f"{', '.join(scheduled) or 'none'}. Two DAGs on a schedule means two "
+            "writers racing for the same tables."
+        )
+    show("scheduled DAGs", "1  (the pipeline, and nothing else)")
+
+    dag = found[NIGHTLY_DAG_ID]
     show("dag", f"{dag['dag_id']}  ({dag.get('fileloc', '?')})")
     # `schedule` is null for a timetable-backed DAG in Airflow 3; the cron it was
     # built from is reported separately as a summary.
@@ -915,7 +992,7 @@ def main() -> int:
         gate_cosmos_importable()
         gate_dbt_executable()
         gate_data_source_reachable()
-        gate_first_dag_parses()
+        gate_one_pipeline_parses()
     except GateFailure as failure:
         print()
         print(f"GATE FAILED: {failure}")

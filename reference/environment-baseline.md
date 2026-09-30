@@ -323,10 +323,41 @@ reports only real DAGs:
 
 ```sh
 curl -s -H "Authorization: Bearer $TOK" 'http://localhost:8080/api/v2/dags'
-# total: 1  ->  pipeline_warehouse_connection_check
+# total: 2  ->  pipeline_nightly_order_kpis, pipeline_warehouse_connection_check
 ```
 
 So `airflow dags list` and the UI can disagree. The UI is the one to trust.
+
+The same staleness has a second shape, and it bit harder than `example_astronauts`
+did. Deleting a DAG file does **not** remove its row: `dags/pipeline/orders_ingestion.py`
+and `dags/pipeline/dbt_transform.py` were removed from the repository and a
+`dag` row survived for each, `airflow dags list` kept reporting them, and the API
+reported them too — not as stale extras, but as live DAGs, one of them carrying
+`timetable_summary = 0 0 * * *`. Airflow had a scheduled nightly run queued for
+a pipeline that no longer had a file.
+
+Neither `airflow dags reserialize` nor a re-parse cycle clears it; the row is
+only removed by
+
+```sh
+echo y | docker exec -i airflow-course_d896a3-scheduler-1 \
+  airflow dags delete pipeline_orders_ingestion
+# Removed 3 record(s)
+```
+
+After which `dag.last_parsed_time` is fresh, `is_stale` is false for both
+surviving DAGs, and the API reports the reduced set. The lesson for the course:
+`dags_are_paused_at_creation` is a local row too, so both the paused flag and the
+row itself are state a clone does not inherit. Gate 5 in
+`tests/assert_pipeline_kpis.py` asserts the parsed DAG set against `EXPECTED_DAGS`,
+which is what catches this class of drift before it can act on anything.
+
+One cosmetic leftover survives the cleanup: `serialized_dag` can hold more than
+one row per `dag_id` after repeated re-serialization of the same file, and
+`airflow dags list` — which reads that table — then prints the same `dag_id`
+twice. The API dedupes by `dag_id` and the `dag` table is correct, so this is
+display-only. Rows written at 15:26 and 15:58 outlived the row written at 16:28
+in this environment.
 
 ## 8. In Airflow 3, `schedule="@daily"` is not a data interval
 
@@ -361,7 +392,7 @@ ValueError: created_after must be earlier than created_before
 
 `CronDataIntervalTimetable` triggers at the same midnight and gives the interval
 [2026-09-30, 2026-10-01), so the run labelled 2026-10-01 extracts 2026-09-30. That
-is what `dags/pipeline/intervals.py` declares, and both nightly DAGs use it.
+is what `dags/pipeline/intervals.py` declares, and the nightly pipeline uses it.
 
 It survived as long as it did because it cannot show up in the obvious checks. The
 damage is only in the **metadatabase**, not in a parse:

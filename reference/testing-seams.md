@@ -24,7 +24,7 @@ It is also the onboarding gate, in the order the environment actually fails:
 | 2 Cosmos importable | `import cosmos` **in the dag-processor**, and the running version matches the pin in `requirements.txt` | Checked in the component that parses DAGs, not on the host. An import that works on the host and fails in the dag-processor is exactly the false negative this step exists to prevent. |
 | 3 dbt executable | `dbt --version` **in the scheduler**, and the running core matches the pin | Checked where `ExecutionMode.LOCAL` actually shells out. A dbt that imports but is not on `PATH` passes every import check and fails every model task. |
 | 4 Data source reachable | DNS for `orders-api` and a real `/health` **from inside the scheduler** | The pipeline reaches the API by service name over the container network (ADR 0005). Proving that from the host over a published port would prove a different thing. |
-| 5 A first DAG parses | zero import errors, and the rendered graph is listed | `astro dev parse` is the same check; this one prints the nine tasks so Cosmos's rendering is visible rather than inferred. |
+| 5 One pipeline, parsed | zero import errors; the parsed DAG set is exactly the two registered in the assertion, and exactly one of them has a timetable; the rendered graph is listed | `astro dev parse` is the same import check. The DAG-set and timetable checks are what rule out a second writer to `public.orders` or a second Cosmos task group — both of which are silent while idempotent, and both of which were present until this gate existed. Printing the nine tasks makes Cosmos's rendering visible rather than inferred. |
 | 6 The assertion | the rest of this file | |
 
 ## What "correct" means here
@@ -54,11 +54,21 @@ run built it. And the extraction task's own report of the window it read must ma
 the window that was requested, because two runs differ in their logical dates and
 that must not matter.
 
+**The pipeline is singular.** This is the claim that needed the most defence to
+make honestly, because the failure mode is invisible. A second DAG carrying a
+copy of the extraction, on the same timetable, writing the same rows to the same
+table, produces *correct numbers* — the upsert makes it idempotent, so two
+writers look exactly like one. The only thing that distinguishes them is the
+shape of the bundle, and the only thing that stays true across clones is the
+source, because "paused" is a row in a local metadata database that a fresh
+`astro dev start` does not inherit. So gate 5 asserts it from Airflow's report
+of what parsed: exactly two DAGs, exactly one with a timetable.
+
 ## The one rule at this seam
 
 The assertion asserts externally observable behaviour. It reads the warehouse and
-Airflow's report of the run it triggered. It does not import a pipeline module, read
-a DAG file, or search a source file for a string.
+Airflow's report of the DAG bundle and of the run it triggered. It does not import
+a pipeline module, read a DAG file, or search a source file for a string.
 
 The reason is that the pipeline can be renamed into passing otherwise. Assert that
 `fct_daily_order_kpis` is spelled that way, or that the intermediate model contains
