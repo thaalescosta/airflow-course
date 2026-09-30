@@ -1,0 +1,945 @@
+/*
+ * Nightly — the shared lesson stylesheet.
+ *
+ * One file carries the whole visual identity. Lessons are self-contained HTML
+ * documents that open from the filesystem with no build step, so this file is a
+ * plain relative link and must never import anything, require a preprocessor,
+ * or depend on a webfont being downloaded.
+ *
+ * Identity, in one paragraph: a high-contrast serif for display and prose, a
+ * humanist monospace for code, no sans face anywhere, one warm signal-orange
+ * accent per page, light mode canonical and dark mode mirroring it, print
+ * reduced to ink on warm paper.
+ *
+ * House rules that are easy to break by accident:
+ *   - There is no sans face anywhere. Not as a fallback, not for UI chrome,
+ *     not for a code-block label. Prose and UI inherit --serif; code uses
+ *     --mono. If you add a font stack, check that every name in it is a serif
+ *     or a monospace face.
+ *   - The accent is one hue and one token. It marks the exercise and nothing
+ *     else. Do not add a second accent or a per-section colour.
+ *   - Airflow's teal (#017CEE and relatives) is a deliberate non-goal: nothing
+ *     in this course should read as official documentation.
+ *   - Contrast figures quoted below were measured, not estimated. Re-measure
+ *     before changing a value.
+ */
+
+/* ==========================================================================
+   1. Font stacks
+   ==========================================================================
+
+   System stacks, not webfonts. The deciding constraint is the offline
+   requirement: a lesson is opened from a file:// URL on a machine with no
+   network, and a webfont in that situation degrades to whatever the platform
+   substitutes, which silently reintroduces the generic look this course exists
+   to reject. The stacks below resolve to a real face on Windows, macOS and
+   Linux with no download.
+
+   --serif prefers high-contrast transitional faces (Charter, Iowan Old Style,
+   Hoefler Text, Palatino) over Times, because Times is present everywhere and
+   its thin strokes are where print legibility is won or lost.
+
+   --mono prefers humanist monospaces: letterforms with a distinguishable
+   a/g/r, a distinct 1/l/I/0/O, and readable italics. Cascadia, SF Mono, Menlo
+   and Consolas all qualify. The generic monospace keywords are last, so the
+   stack degrades to the platform mono rather than to nothing.
+*/
+
+:root {
+  --serif: "Charter", "Bitstream Charter", "Iowan Old Style", "Hoefler Text",
+    "Palatino Linotype", "Book Antiqua", Palatino, Georgia,
+    "Times New Roman", Times, serif;
+
+  --mono: "Cascadia Mono", "Cascadia Code", "SF Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", "Liberation Mono", "Nimbus Mono PS", monospace;
+}
+
+/* ==========================================================================
+   2. Colour tokens
+   ==========================================================================
+
+   Light mode is canonical: these are the real values, not the overrides. Dark
+   mode (section 4) remaps the same token names onto a mirrored dark palette,
+   so every component below is written once against tokens and needs no
+   dark-mode branch of its own.
+
+   Measured contrast, against the surface each token is used on:
+
+     light  --ink         #1F1A14 on --paper #F6F1E7 -> 15.34:1
+     light  --ink-muted   #5A4F43 on --paper          ->  7.08:1
+     light  --ink-faint   #6F6455 on --surface-sunk  ->  4.75:1   (its worst surface)
+     light  --accent      #A8360A on --paper #F6F1E7 ->  5.84:1
+     light  --accent      #A8360A on --surface #FFFDF8->  6.46:1
+     light  --accent      #A8360A on --surface-sunk   ->  5.39:1
+     light  --rule-strong #8F8069 on --paper          ->  3.42:1   (non-text boundary)
+     dark   --ink         #ECE2D4 on --paper #17130F -> 14.43:1
+     dark   --ink-muted   #B6A894 on --paper          ->  7.93:1
+     dark   --ink-faint   #A3947F on --surface #221C16->  5.70:1   (its worst surface)
+     dark   --accent      #F2853C on --paper #17130F ->  7.21:1
+     dark   --accent      #F2853C on --surface #221C16->  6.58:1
+     dark   --accent      #F2853C on --surface-sunk  ->  7.56:1
+     dark   --rule-strong #7F6D5B on --surface        ->  3.40:1   (non-text boundary)
+
+   The accent is signal orange. #A8360A is a burnt signal orange: unmistakably
+   orange, and deep enough to hold 4.5:1 as text on warm paper. It is not teal,
+   and it is not close enough to a red-orange error state to be read as a status
+   colour. The dark-mode value is the same hue read a step brighter, because a
+   burnt orange with 5.8:1 on warm paper has no counterpart on warm black.
+
+   --rule is a purely decorative hairline (a section separator, the inner chip
+   border on inline code) and is exempt from the 3:1 non-text requirement.
+   --rule-strong is the boundary that carries meaning (the accent rule on the
+   exercise, the left rule on a code block or a live-file reference, the kbd
+   edge) and holds 3:1 or better on every surface it lands on.
+*/
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces, warm. */
+  --paper: #f6f1e7;
+  --surface: #fffdf8;
+  --surface-sunk: #efe8db;
+
+  /* Ink, warm-black. Never pure black: on warm paper it vibrates. */
+  --ink: #1f1a14;
+  --ink-muted: #5a4f43;
+  --ink-faint: #6f6455;
+
+  /* Rules: one decorative hairline, one meaningful boundary. */
+  --rule: #ddd3c2;
+  --rule-strong: #8f8069;
+
+  /* The one accent. */
+  --accent: #a8360a;
+
+  /* Code ink: distinct from body ink so a block reads as a different register,
+     but far above the text threshold on every surface. */
+  --code-ink: #2c241b;
+
+  /* Focus ring is the accent, so focus and the exercise read as one colour. */
+  --focus: var(--accent);
+}
+
+/* ==========================================================================
+   3. Reset and page frame
+   ==========================================================================*/
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 17px base, rem-driven sizing throughout, so a reader who changes the
+     browser default sees the whole page change with it. */
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.0625rem; /* 17px */
+  line-height: 1.62;
+  font-kerning: normal;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  text-rendering: optimizeLegibility;
+  padding: 0 1.5rem 5rem;
+  /* Long identifiers and paths in prose must not blow out the measure. */
+  overflow-wrap: break-word;
+}
+
+/* The measure. Tufte's constraint, kept: a comfortable line length for
+   sustained reading. */
+.lesson {
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   4. Dark mode
+   ==========================================================================
+
+   Mirrors light mode token for token. Same hue for the accent, same contrast
+   targets, same component structure — nothing below needs a dark-mode branch.
+*/
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --paper: #17130f;
+    --surface: #221c16;
+    --surface-sunk: #100d0a;
+
+    --ink: #ece2d4;
+    --ink-muted: #b6a894;
+    --ink-faint: #a3947f;
+
+    --rule: #352c23;
+    --rule-strong: #7f6d5b;
+
+    --accent: #f2853c;
+
+    --code-ink: #e8dccb;
+
+    --focus: var(--accent);
+  }
+}
+
+/* Forced colours: hand the page back to the OS palette. */
+@media (forced-colors: active) {
+  :root {
+    --accent: LinkText;
+    --rule: GrayText;
+    --rule-strong: CanvasText;
+  }
+}
+
+/* ==========================================================================
+   5. Typography
+   ==========================================================================*/
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--serif);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.011em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 1.375rem;
+  margin-top: 2.5rem;
+}
+
+h3 {
+  font-size: 1.0625rem;
+  margin-top: 1.75rem;
+}
+
+p,
+ul,
+ol,
+dl {
+  margin: 0 0 1.15em;
+}
+
+ul,
+ol {
+  padding-left: 1.35em;
+}
+
+li + li {
+  margin-top: 0.35em;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: var(--rule);
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration-color: var(--accent);
+}
+
+/* Standing furniture in small caps. A serif small cap, not a label font
+   borrowed from somewhere else: that is the whole point. */
+.eyebrow {
+  font-family: var(--serif);
+  font-variant-caps: small-caps;
+  letter-spacing: 0.09em;
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+  margin: 0 0 0.35rem;
+}
+
+.lede {
+  font-size: 1.1875rem;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 1.75rem;
+}
+
+strong {
+  font-weight: 700;
+}
+
+em {
+  font-style: italic;
+}
+
+/* ==========================================================================
+   6. Focus
+   ==========================================================================
+
+   The ring is never removed. :focus:not(:focus-visible) drops it for pointer
+   input only, which is the one case where a ring is noise rather than
+   information.
+*/
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ==========================================================================
+   7. Code
+   ==========================================================================
+
+   Mono everywhere code appears, including the annotations that describe it.
+   Readable and selectable: wrapped rather than scrolled, no truncated
+   whitespace, never at a size that makes the reader count characters.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+code {
+  font-size: 0.875em;
+  background: var(--surface-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.08em 0.3em;
+  /* Inline code must not reflow onto a line of its own in prose. */
+  white-space: nowrap;
+}
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: 3px;
+  padding: 0.85rem 1rem;
+  margin: 0 0 1.4rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--code-ink);
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  tab-size: 4;
+}
+
+pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  white-space: inherit;
+}
+
+code,
+pre {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Line annotations. Muted ink rather than a third colour: a code comment is
+   still text, and it is still one of two inks. */
+pre .cmt {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+pre .key {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+kbd {
+  font-size: 0.8125em;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0.08em 0.35em;
+  background: var(--surface);
+}
+
+/* Form chrome inherits the serif. A control that renders in a foreign face is
+   the usual way a sans face gets onto a page. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-family: var(--serif);
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  padding: 0.4rem 0.6rem;
+}
+
+/* ==========================================================================
+   8. Structural furniture
+   ==========================================================================*/
+
+.lesson > header.masthead {
+  padding: 3.25rem 0 0;
+  margin-bottom: 2rem;
+}
+
+.masthead h1 {
+  margin-bottom: 0.35rem;
+}
+
+.masthead .standfirst {
+  color: var(--ink-muted);
+  font-size: 1.0625rem;
+  margin: 0.75rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--rule);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2.5rem 0;
+}
+
+/* Sidenotes, Tufte-style. In the flow at a narrow width, moved into the margin
+   by the wide-screen query in section 12. Semantically an aside, so assistive
+   technology announces it as supplementary whatever the layout does. */
+.sidenote {
+  display: block;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.sidenote-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  margin-right: 0.4em;
+}
+
+/* Committed motion. A lesson embeds a rendered clip by relative path; the clip
+   and its composition source are committed together and asserted current by the
+   media-freshness seam. No accent here: the accent marks the exercise only.
+
+   The video is decoration for comprehension, not content, so the surrounding
+   text must stand without it — a figure element carries the caption either way,
+   and controls are shown on hover/focus so the page is not covered by chrome. */
+figure.motion {
+  margin: 2.25rem 0;
+  padding: 0;
+}
+
+figure.motion > video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--surface-sunk);
+  border: 1px solid var(--rule);
+}
+
+figure.motion > figcaption {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  padding-top: 0.7rem;
+}
+
+/* ==========================================================================
+   9. The lesson anatomy
+   ==========================================================================
+
+   Six required elements, six components, defined once here and reused by every
+   lesson. The mapping is one to one with AGENTS.md. No lesson inlines its own
+   version of any of these.
+
+     .exercise        1. the specification-shaped exercise
+     .worked-ref      2. the worked example, placed elsewhere
+     .built           3. the statement of what was just built
+     .source          4. the primary source cited
+     .next-source     5. the primary source recommended next
+     .followup        6. the follow-up question
+*/
+
+/* --- 1. The specification-shaped exercise ------------------------------- */
+
+/* The accent appears here and nowhere else on a page. One accent: the
+   exercise. That is the whole visual job of the colour. */
+.exercise {
+  border-top: 3px solid var(--accent);
+  background: var(--surface);
+  padding: 1.5rem 1.5rem 0.4rem;
+  margin: 2.25rem 0 0;
+}
+
+.exercise > h2 {
+  margin-top: 0;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.05em;
+  font-size: 1.25rem;
+}
+
+.exercise .spec-part {
+  margin-bottom: 1.25rem;
+}
+
+.spec-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+/* Requirement, interface surface and constraints as a definition list, so the
+   parts of a specification read as three labelled parts. */
+.spec-list {
+  margin: 0.35rem 0 0;
+}
+
+.spec-list dt {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  margin-top: 0.6rem;
+}
+
+.spec-list dd {
+  margin: 0.1rem 0 0;
+}
+
+/* --- 2. The worked example, referenced from elsewhere ------------------- */
+
+.worked-ref {
+  background: var(--surface-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1rem 1.15rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.9375rem;
+}
+
+.worked-ref-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.worked-ref > :last-child {
+  margin-bottom: 0;
+}
+
+/* --- 3. What was just built --------------------------------------------- */
+
+.built {
+  margin: 1.75rem 0;
+  padding: 0.9rem 0 0.9rem 1.15rem;
+  border-left: 3px solid var(--rule-strong);
+  font-size: 1.0625rem;
+}
+
+.built-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+/* --- 4 and 5. Primary sources ------------------------------------------- */
+
+.source,
+.next-source {
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--rule);
+  margin: 1.5rem 0;
+}
+
+.source-label,
+.next-source-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.source > :last-child,
+.next-source > :last-child {
+  margin-bottom: 0;
+}
+
+/* --- 6. The follow-up question ------------------------------------------ */
+
+.followup {
+  margin: 2rem 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.followup-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.followup p {
+  margin-bottom: 0;
+  font-size: 1.0625rem;
+}
+
+/* --- Cross-links to related lessons, by anchor -------------------------- */
+
+.crosslinks {
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--rule);
+  margin: 1.5rem 0 0;
+}
+
+.crosslinks-label {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.07em;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.crosslinks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* --- Cross-links to live files, not copies of them ---------------------- */
+
+/* A reference to a file that exists in the repository. The lesson points at the
+   live file and never pastes it: a pasted copy is a copy that rots. */
+.live-file {
+  display: block;
+  margin: 0.75rem 0 1.25rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.live-file code {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  font-size: inherit;
+  white-space: inherit;
+}
+
+/* --- End matter ---------------------------------------------------------- */
+
+.endmatter {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.875rem;
+  color: var(--ink-faint);
+}
+
+/* --- Skip link ----------------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.5rem 0.85rem;
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
+
+/* ==========================================================================
+   10. Print: ink on warm paper
+   ==========================================================================
+
+   Print reduces to ink on warm paper. What costs ink and carries no meaning
+   on paper is dropped; the exercise is explicitly kept whole, because a
+   printed lesson without its exercise is a handout nobody can work through.
+
+   The page box leaves a wide right margin, so the printed lesson sits on a desk
+   with room to write answers in beside it. The geometry is arithmetic: A4 is
+   210mm, the margins take 20 + 45, leaving a 145mm text column. At 11pt that is
+   about 37em, or roughly 74 characters — the top of the comfortable reading
+   range. A symmetric margin would give a ~90 character measure, which is the
+   usual way a printable page becomes unreadable.
+*/
+
+@page {
+  size: A4 portrait;
+  margin: 16mm 45mm 18mm 20mm;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+
+    /* Paper white, ink black, rules grey. No second colour on the page: the
+       exercise keeps its weight from a heavy black rule rather than an orange
+       one, so the print stays legible on a greyscale printer and costs one
+       cartridge. */
+    --paper: #ffffff;
+    --surface: #ffffff;
+    --surface-sunk: #ffffff;
+
+    --ink: #000000;
+    --ink-muted: #333333;
+    --ink-faint: #333333;
+
+    --rule: #999999;
+    --rule-strong: #666666;
+
+    --accent: #000000;
+    --code-ink: #000000;
+  }
+
+  html {
+    font-size: 100%;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 11pt;
+    line-height: 1.45;
+    padding: 0;
+  }
+
+  .lesson {
+    max-width: none;
+    margin: 0;
+  }
+
+  a {
+    color: #000000;
+    text-decoration: underline;
+    text-decoration-color: #000000;
+  }
+
+  /* A printed page cannot be clicked, so an external target is spelled out.
+     Lesson-to-lesson links stay silent: they are resolved by the lesson set,
+     not by the reader holding one page. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-family: var(--mono);
+    font-size: 7.5pt;
+    color: #333333;
+    word-break: break-all;
+  }
+
+  a[href^=".."]:not([href$=".md"])::after {
+    content: none;
+  }
+
+  h1 {
+    font-size: 17pt;
+  }
+
+  h2 {
+    font-size: 13pt;
+    margin-top: 14pt;
+  }
+
+  h3 {
+    font-size: 11pt;
+    margin-top: 10pt;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  p,
+  li {
+    orphans: 2;
+    widows: 2;
+  }
+
+  /* The exercise is never split across a page boundary, and never dropped. */
+  .exercise,
+  .followup,
+  .worked-ref,
+  .built {
+    break-inside: avoid;
+  }
+
+  .exercise {
+    border-top-width: 2pt;
+    background: transparent;
+    padding: 10pt 0 0;
+    margin-top: 12pt;
+  }
+
+  /* Code stays legible on paper, wrapped, and never split mid-block. */
+  pre {
+    background: transparent;
+    border: 1pt solid #999999;
+    border-left: 3pt solid #666666;
+    padding: 6pt 8pt;
+    font-size: 8.5pt;
+    line-height: 1.4;
+    break-inside: avoid;
+    white-space: pre-wrap;
+  }
+
+  code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 9pt;
+  }
+
+  /* Furniture that means nothing on paper. */
+  .skip-link,
+  .screen-only {
+    display: none !important;
+  }
+
+  .sidenote {
+    font-size: 9pt;
+    break-inside: avoid;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   11. Reduced motion
+   ==========================================================================
+
+   Nothing in this stylesheet animates today. The block is here so that a
+   component added later inherits the guarantee instead of having to remember
+   it.
+*/
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   12. Wide screen: sidenotes into the margin
+   ==========================================================================
+
+   At a width where there is a margin to put them in, sidenotes move out of the
+   flow. Document order is unchanged, so reading order is identical at every
+   width and in every screen reader.
+
+   The threshold is arithmetic, not taste. The column is 34rem and a sidenote
+   needs 15rem plus a 2.5rem gap beside it; the column is centred, so the
+   viewport has to clear 34rem + 2 * (2.5rem + 15rem) = 70rem before a margin
+   note fits with equal space outside it. Any lower and the sidenote overflows
+   the viewport and pushes the whole page sideways.
+*/
+
+@media (min-width: 70rem) {
+  .lesson {
+    position: relative;
+  }
+
+  .sidenote {
+    position: absolute;
+    left: calc(100% + 2.5rem);
+    width: 15rem;
+    margin-top: 0;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  /* A sidenote that would otherwise land below the fold stays in the flow
+     rather than drifting out of reach. */
+  .sidenote--stays {
+    position: static;
+    width: auto;
+    margin: 0.9rem 0;
+  }
+}
+
+/* ==========================================================================
+   13. Higher contrast preference
+   ==========================================================================*/
+
+@media (prefers-contrast: more) {
+  :root {
+    --ink-muted: #40372d;
+    --ink-faint: #40372d;
+    --rule: #b3a795;
+    --rule-strong: #5f5344;
+  }
+}
+
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root {
+    --ink-muted: #d3c7b6;
+    --ink-faint: #d3c7b6;
+    --rule: #5c4e40;
+    --rule-strong: #b0a08a;
+  }
+}

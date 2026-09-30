@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson NN — replace this with the lesson title</title>
+<meta name="description" content="One sentence: what the learner can do differently after this lesson.">
+<!--
+  The lesson template. It carries the lesson anatomy, and it is the only place
+  that anatomy is written down as markup. Copy this file into lessons/, keep the
+  hrefs below in copy-target form (relative to lessons/), and replace the
+  guidance text with lesson content.
+
+  The stylesheet href is written so that it resolves both in this file's own
+  location (assets/) and after the copy (lessons/): ../assets/lesson.css walks
+  up to the repo root from either directory and lands on the same file. Every
+  other href below is in copy-target form and only resolves once copied.
+
+  Anatomy, one to one with the six required elements in AGENTS.md:
+    1. .exercise       the specification-shaped exercise
+    2. .worked-ref     the worked example, referenced from elsewhere
+    3. .built          the statement of what was just built
+    4. .source         the primary source cited
+    5. .next-source    the primary source recommended next
+    6. .followup       the follow-up question
+-->
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to the lesson</a>
+
+<div class="lesson">
+
+<header class="masthead">
+  <p class="eyebrow">Nightly — lesson NN</p>
+  <h1>Replace with the lesson title</h1>
+  <p class="standfirst">One or two sentences naming the thing the learner will be
+  able to do afterwards. Not a summary of the page: a claim about the reader.</p>
+</header>
+
+<main id="main">
+
+  <p class="lede">The opening sentence. Lead with the problem the learner has,
+  not with the tool they are about to meet.</p>
+
+  <h2 id="read">The read</h2>
+
+  <!--
+    Short. A lesson is a short read and then a substantial exercise, never both
+    in the same sitting, so the read is the part that fits in one pass. Every
+    lesson still carries at least one explanation of something a Python
+    developer would not already know; that is what keeps the course publishable
+    later.
+  -->
+  <p>Replace with the explanation. Concrete before abstract, and shorter than you
+  think it needs to be.</p>
+
+  <p>A claim that needs a source belongs here rather than in your head:
+  <a href="https://example.invalid/primary-source">the primary source</a> settles
+  it. Assert nothing about a version number, a CLI flag, or an API surface that
+  you have not read this lesson's <code>.source</code> block for.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">Sidenote.</span>
+    Inline in the flow at a narrow width, in the margin at a wide one, and
+    announced as supplementary either way. Use for the aside, the caveat, and
+    the thing a reader would otherwise have to keep in their head. Add
+    <code>sidenote--stays</code> to keep it in the flow on a wide screen.
+  </aside>
+
+  <!--
+    Code goes here, and only here. Do not restate the code in prose, and do not
+    paste a file into the lesson: reference the live file instead, with
+    .live-file below.
+  -->
+  <pre><code class="cmt"># The code excerpt this lesson needs, and nothing more.</code></pre>
+
+  <h2 id="crosslinks-heading">Related</h2>
+  <nav class="crosslinks" aria-labelledby="crosslinks-heading">
+    <span class="crosslinks-label">Related lessons</span>
+    <ul>
+      <!-- Cross-link by anchor, to the lesson that holds the other half of the
+           concept. Copy-target form: a sibling in lessons/. -->
+      <li><a href="000-template-specimen.html#anatomy">Lesson NN — why this belongs here</a></li>
+    </ul>
+  </nav>
+
+  <!-- 2. The worked example, deliberately elsewhere. -->
+  <div class="worked-ref">
+    <span class="worked-ref-label">Worked example</span>
+    <p>Name the file that holds it, link to it, and say what to look at. The
+    example lives in the repository, not in this lesson — a reader who is stuck
+    can open it, and a reader who is not cannot transcribe it.</p>
+    <p class="live-file">Live file: <code><a href="../dags/pipeline/&lt;module&gt;.py">&lt;repo&gt;/dags/pipeline/&lt;module&gt;.py</a></code></p>
+  </div>
+
+  <!-- 1. The specification-shaped exercise. -->
+  <section class="exercise" aria-labelledby="exercise-heading">
+    <h2 id="exercise-heading">Exercise</h2>
+
+    <div class="spec-part">
+      <span class="spec-label">Requirement</span>
+      <p>One sentence. What the learner builds, in the terms of the thing being
+      built. No code here: this is a specification, and the learner writes the
+      code.</p>
+    </div>
+
+    <dl class="spec-list">
+      <dt>Input</dt>
+      <dd>What exists before the learner starts: the branch state, the files
+      already written, the data in the warehouse.</dd>
+
+      <dt>Output</dt>
+      <dd>What exists afterwards, stated as an artifact: a module at a path, a
+      model that materialises, a state you can observe.</dd>
+
+      <dt>Interface surface</dt>
+      <dd>The API the learner is allowed to reach for — the signatures, the
+      decorators, the CLI verbs, with the pinned versions from
+      <code>RESOURCES.md</code>. Name the surface; do not demonstrate it.</dd>
+
+      <dt>Constraints</dt>
+      <dd>
+        <ul>
+          <li>No code to copy. The worked example above is referenceable, not
+          transcribable.</li>
+          <li>Nothing added to the project that a later lesson would have to
+          undo.</li>
+          <li>Verified at the pipeline seam: the thing is correct when the
+          pipeline says it is, over a re-run and over a backfill.</li>
+        </ul>
+      </dd>
+    </dl>
+  </section>
+
+  <!-- 3. What was just built. -->
+  <div class="built">
+    <span class="built-label">What was just built</span>
+    <p>One declarative sentence naming the artifact the exercise produced. Past
+    tense, no encouragement, no summary of the exercise.</p>
+  </div>
+
+  <!-- 4. The primary source cited. -->
+  <div class="source">
+    <span class="source-label">Primary source</span>
+    <p>The entry this lesson's claims trace back to, from
+    <code>RESOURCES.md</code>, with the version the claim was read at:
+    <a href="https://example.invalid/primary-source">Source title</a>, read at
+    the pinned version.</p>
+  </div>
+
+  <!-- 5. The primary source recommended next. -->
+  <div class="next-source">
+    <span class="next-source-label">Read next</span>
+    <p>One source, one anchor, and why: <a href="https://example.invalid/next">the
+    next entry in <code>RESOURCES.md</code></a>, specifically the section that
+    answers the question this exercise raised.</p>
+  </div>
+
+  <!-- 6. The follow-up question. -->
+  <div class="followup">
+    <span class="followup-label">Before you move on</span>
+    <p>A question the learner now has the vocabulary to answer, and that has more
+    than one defensible answer. Not a yes/no check that reading was enough.</p>
+  </div>
+
+</main>
+
+<footer class="endmatter">
+  <p>Lesson NN of Nightly. Open it directly — there is no build step and no
+  running toolchain. Shared stylesheet:
+  <a href="../assets/lesson.css"><code>assets/lesson.css</code></a>.</p>
+</footer>
+
+</div>
+</body>
+</html>

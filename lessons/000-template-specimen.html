@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The shape of a lesson — Nightly</title>
+<meta name="description" content="A specimen that exercises the Nightly lesson template and shared stylesheet: it teaches nothing about Airflow or dbt.">
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to the lesson</a>
+
+<div class="lesson">
+
+<header class="masthead">
+  <p class="eyebrow">Template specimen — not a curriculum lesson</p>
+  <h1>The shape of a lesson</h1>
+  <p class="standfirst">This document exercises the course's lesson template and its
+  shared stylesheet. It teaches nothing about Airflow or dbt, because a real
+  lesson belongs to the curriculum and not to the template. A template nobody
+  has used is not a template.</p>
+</header>
+
+<main id="main">
+
+  <p class="lede">A lesson in this course is a short read and then a substantial
+  exercise — never both in the same sitting. This specimen is the read. Its
+  exercise is the authoring of the next lesson, and it is specified below rather
+  than demonstrated.</p>
+
+  <h2 id="why">Why a specimen rather than a lesson</h2>
+
+  <p>The curriculum for this course is a continuous project: one synthetic
+  orders API, one warehouse, one dbt project, one DAG that grows lesson by
+  lesson until it holds up in production. That sequence is owned by the
+  curriculum, and a first lesson that taught something invented to fill this
+  page would put a lie in the repository and a false anchor for every lesson
+  that would link here later.</p>
+
+  <p>So this file is labelled as what it is, and it does one job: it proves that
+  the <a href="../assets/lesson-template.html#exercise-heading">template's
+  markup</a> and the <a href="../assets/lesson.css"><code>assets/lesson.css</code></a>
+  stylesheet produce a readable, printable lesson. Every component a lesson can
+  use appears here at least once, which is the only way to know the stylesheet
+  covers all of them. The live version of this page is the
+  <code>README</code>-shaped future lesson's job, not this file's.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">On the file name.</span>
+    This is lesson <code>000</code> and is not part of the sequence: the first
+    real lesson takes <code>01</code>. The zero is a slot for a document that
+    demonstrates the format, so that no curriculum lesson has to be demoted to
+    that role.
+  </aside>
+
+  <h2 id="read">The read</h2>
+
+  <p>Three things about a lesson are worth knowing before writing one, and none
+  of them are Airflow.</p>
+
+  <p><strong>The read and the exercise are separate sittings.</strong> The read
+  is short enough to finish in one pass; the exercise is substantial enough that
+  doing it immediately would mean doing it badly. That split is the constraint
+  from <a href="../MISSION.md"><code>MISSION.md</code></a> — study in
+  substantial blocks — and it is why the anatomy puts a hard boundary between
+  the explanation and the specification. It is also why the short-lesson
+  constraint is pedagogical rather than cosmetic: it forces the source material
+  to be decomposed, and the decomposition is most of the value.</p>
+
+  <p><strong>The exercise is a specification.</strong> It states a requirement,
+  names the interface surface, and lists the constraints — then it stops. The
+  learner writes the code. There is deliberately no worked implementation inside
+  an exercise, and none adjacent to one: a worked example that sits next to the
+  exercise is a transcription target, and transcription produces the feeling of
+  understanding instead of its structure. The argument is recorded in
+  <a href="../docs/adr/0007-exercises-are-specifications.md">ADR 0007</a> and is
+  not reopened here.</p>
+
+  <p><strong>A lesson points at files; it does not contain them.</strong> Every
+  reference to code in this course is an anchor to the live file in the
+  repository. The reason is ordinary: a copy inside a lesson is a copy that goes
+  stale, and a reader who trusts a stale copy writes against code that no longer
+  exists. The component for it is
+  <code>.live-file</code>, and this lesson uses it twice:</p>
+
+  <p class="live-file">Live file: <code><a href="../AGENTS.md#lesson-anatomy-required">&lt;repo&gt;/AGENTS.md § Lesson anatomy (required)</a></code></p>
+
+  <p>When the course's project exists, the same component points at a pipeline
+  module. That path is written in the specimen rather than linked, because the
+  repository root is not built yet and a link to nothing teaches nothing:</p>
+
+  <p class="live-file">Reserved, not linked yet: <code>&lt;repo&gt;/dags/pipeline/&lt;module&gt;.py</code></p>
+
+  <h2 id="anatomy">The anatomy, all six parts</h2>
+
+  <p>The six required elements, with the component that implements each and a
+  link to the place in this document where it appears. The same six are required
+  of every lesson, and they are the reason this file is longer than its content
+  strictly needs: the specimen exists to prove the slots work.</p>
+
+  <dl class="spec-list">
+    <dt>1. The specification-shaped exercise — <code>.exercise</code></dt>
+    <dd>Requirement, interface surface, constraints. <a href="#exercise">On this
+    page.</a></dd>
+
+    <dt>2. The worked example, placed elsewhere — <code>.worked-ref</code></dt>
+    <dd>A pointer to a file that holds one, in a different directory from the
+    exercise. <a href="#worked-example">On this page.</a></dd>
+
+    <dt>3. The statement of what was just built — <code>.built</code></dt>
+    <dd>One declarative sentence about the artifact the exercise produced.
+    <a href="#built">On this page.</a></dd>
+
+    <dt>4. The primary source cited — <code>.source</code></dt>
+    <dd>An entry from <code>RESOURCES.md</code>, read at the version pinned
+    there. <a href="#sources">On this page.</a></dd>
+
+    <dt>5. The primary source recommended next — <code>.next-source</code></dt>
+    <dd>One entry, one anchor, and a reason.
+    <a href="#sources">On this page.</a></dd>
+
+    <dt>6. The follow-up question — <code>.followup</code></dt>
+    <dd>A question with more than one defensible answer, asked before the reader
+    moves on. <a href="#before-you-move-on">On this page.</a></dd>
+  </dl>
+
+  <p>The rule behind the list is that a reader can tell which slot they are
+  looking at without being told, because each one looks different. That is the
+  stylesheet's whole job: one accent, spent on the exercise and nowhere else,
+  and everything else carrying its weight with rules, weight and whitespace
+  instead of colour.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">On the accent.</span>
+    One warm signal-orange per page, and it marks the exercise only. It is not
+    Airflow's teal: a course that borrows the tool's colour reads as official
+    documentation, and this course is meant to read as one person's working
+    repository.
+  </aside>
+
+  <h2 id="motion">Committed motion</h2>
+
+  <p>A lesson may embed a rendered clip by relative path. The clip and the
+  composition that produced it are committed together, and the media-freshness
+  seam fails if the two ever drift apart — which is the only thing in the
+  repository that would notice. This is the one subject ADR 0002 admits Remotion
+  for: a hand-off between processes, where the ordering is hard to hold in prose
+  and trivial to watch.</p>
+
+  <figure class="motion">
+    <video controls preload="none" playsinline
+           poster=""
+           width="1920" height="1080">
+      <source src="../motion/clips/airflow-handoff.mp4" type="video/mp4">
+      Your browser cannot play this clip. The text above carries the same claim.
+    </video>
+    <figcaption>The scheduler hand-off: a DAG file parsed by the DAG processor,
+    a task instance queued and scheduled by the scheduler, and a worker running
+    it — over the metadata database. The clip is committed media; a reader needs
+    no Node toolchain to watch it, and the page is complete without it.</figcaption>
+  </figure>
+
+  <p class="live-file">Committed media: <code><a href="../motion/clips/airflow-handoff.mp4">&lt;repo&gt;/motion/clips/airflow-handoff.mp4</a></code> — <a href="../motion/">authoring source</a></p>
+
+  <h2 id="related">Related</h2>
+  <nav class="crosslinks" aria-labelledby="related-heading">
+    <span class="crosslinks-label">Related documents</span>
+    <ul>
+      <li><a href="../assets/lesson-template.html#exercise-heading">Lesson template — the worked example for this specimen</a></li>
+      <li><a href="../AGENTS.md#lesson-anatomy-required"><code>AGENTS.md</code> — the rule this document is built to satisfy</a></li>
+      <li><a href="../docs/adr/0002-html-lessons-spine-remotion-for-motion.md">ADR 0002 — HTML lessons are the spine</a></li>
+      <li><a href="../RESOURCES.md">RESOURCES.md — the source-of-truth list</a></li>
+    </ul>
+  </nav>
+
+  <div class="worked-ref" id="worked-example">
+    <span class="worked-ref-label">Worked example</span>
+    <p>The worked example for this exercise is the lesson template, and it is
+    deliberately not in this file. A reader stuck on the exercise opens
+    <code>assets/lesson-template.html</code> and sees the anatomy filled in; a
+    reader working through it cannot copy one line out of this page, because the
+    content of that page is about the format and contains none of the answer.</p>
+    <p class="live-file">Live file: <code><a href="../assets/lesson-template.html">&lt;repo&gt;/assets/lesson-template.html</a></code></p>
+  </div>
+
+  <section class="exercise" id="exercise" aria-labelledby="exercise-heading">
+    <h2 id="exercise-heading">Exercise</h2>
+
+    <div class="spec-part">
+      <span class="spec-label">Requirement</span>
+      <p>Write the next lesson in this course — a short read and a substantial
+      exercise, on a subject taken from the curriculum sequence — and get it past
+      the constraints below. Write the lesson; this page does not contain it.</p>
+    </div>
+
+    <dl class="spec-list">
+      <dt>Input</dt>
+      <dd>The curriculum's own sequencing: the subject the next lesson is
+      supposed to own, whatever that is. Not supplied here, because inventing one
+      is how a specimen turns into a lie.</dd>
+
+      <dt>Output</dt>
+      <dd>One file at <code>lessons/NN-&lt;slug&gt;.html</code>, carrying all six
+      anatomy elements, openable by double-click with no build step and no running
+      toolchain.</dd>
+
+      <dt>Interface surface</dt>
+      <dd>The stylesheet's classes, which are the whole API of a lesson:
+      <code>.masthead</code>, <code>.eyebrow</code>, <code>.standfirst</code>,
+      <code>.lede</code>, <code>.sidenote</code>, <code>.live-file</code>,
+      <code>.exercise</code>, <code>.spec-label</code>,
+      <code>.spec-list</code>, <code>.worked-ref</code>, <code>.built</code>,
+      <code>.source</code>, <code>.next-source</code>, <code>.followup</code>,
+      <code>.crosslinks</code>, <code>.endmatter</code>, <code>.skip-link</code>.
+      Plus <code>../assets/lesson.css</code> as the only stylesheet, and
+      <code>../assets/lesson-template.html</code> as the only worked example.</dd>
+
+      <dt>Constraints</dt>
+      <dd>
+        <ul>
+          <li>No sans face in any font stack — in the lesson or in anything it
+          adds to the repository.</li>
+          <li>One accent on the page, spent on <code>.exercise</code>. A second
+          hue is a failure, not a feature.</li>
+          <li>Every claim traced to an entry in
+          <a href="../RESOURCES.md"><code>RESOURCES.md</code></a>, cited at the
+          version pinned there.</li>
+          <li>Code referenced as a live file, never pasted. Cross-links to
+          sibling lessons carry an anchor.</li>
+          <li>The lesson's own exercise is a specification: requirement, surface,
+          constraints, and no code.</li>
+          <li>Readable and printable: a printed copy must keep its exercise, and
+          the file must survive both colour schemes with the text still
+          legible.</li>
+        </ul>
+      </dd>
+    </dl>
+
+    <div class="spec-part">
+      <span class="spec-label">How you know it passes</span>
+      <p>Print it. If the exercise is not on the paper, the lesson is not done —
+      that is the cheapest check in the whole format and the one most often
+      skipped. Then open it with the network off, which is the condition it will
+      actually be read under.</p>
+
+      <pre><code><span class="cmt"># Open the lesson. Windows, no toolchain, no server:</span>
+start "" "lessons\01-&lt;slug&gt;.html"
+
+<span class="cmt"># Open the lesson. macOS or Linux:</span>
+xdg-open lessons/01-&lt;slug&gt;.html   <span class="cmt"># or: open lessons/01-&lt;slug&gt;.html</span></code></pre>
+    </div>
+  </section>
+
+  <div class="built" id="built">
+    <span class="built-label">What was just built</span>
+    <p>One shared stylesheet carrying the course's visual identity, one lesson
+    template carrying the anatomy, and this specimen proving both render — a
+    lesson format that can be opened offline, read in either colour scheme, and
+    printed with its exercise intact.</p>
+  </div>
+
+  <div class="source" id="sources">
+    <span class="source-label">Primary source</span>
+    <p>The claim that a lesson must open without a running toolchain follows from
+    where the toolchain lives: the project is the
+    <a href="https://github.com/astronomer/astro-cli">Astro CLI</a> project at
+    the repository root, and a lesson is a document that precedes it. The pinned
+    Airflow version this course reads at is recorded in
+    <a href="https://airflow.apache.org/docs/apache-airflow/stable/installation/supported-versions.html">the
+    supported-versions page</a>; this specimen asserts no version-specific fact,
+    which is why it cites it rather than a claim built on it.</p>
+  </div>
+
+  <div class="next-source">
+    <span class="next-source-label">Read next</span>
+    <p>Before authoring the first real lesson, read the
+    <a href="https://github.com/astronomer/astro-cli">Astro CLI</a> repository
+    README to the point where you can say what
+    <code>astro dev parse</code> checks and what it does not. The first lesson
+    will ask you to verify something with it, and a specification that asks for a
+    verification the reader cannot yet name is not a specification.</p>
+  </div>
+
+  <div class="followup" id="before-you-move-on">
+    <span class="followup-label">Before you move on</span>
+    <p>This page spends its one accent on the exercise and leaves the read
+    entirely uncoloured. Argue for one change to that allocation that would make
+    a reader more likely to finish the exercise — then name which anatomy element
+    your change puts at risk, and what you would have to give up to pay for it.</p>
+  </div>
+
+</main>
+
+<footer class="endmatter">
+  <p><code>000-template-specimen</code> — a specimen, not a numbered lesson.
+  No build step, no toolchain, no network. Styling:
+  <a href="../assets/lesson.css"><code>assets/lesson.css</code></a>.
+  Template: <a href="../assets/lesson-template.html"><code>assets/lesson-template.html</code></a>.</p>
+</footer>
+
+</div>
+</body>
+</html>
