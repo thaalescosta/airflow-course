@@ -1,0 +1,28 @@
+{
+  "name": "airflow-course-motion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion projects for the Airflow course. Authoring-time only: the rendered clips in clips/ are committed and the course never needs Node to read a lesson.",
+  "license": "MIT",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "node scripts/render.mjs",
+    "typecheck": "tsc --noEmit",
+    "check:freshness": "node scripts/check-freshness.mjs",
+    "check": "npm run typecheck && npm run check:freshness"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.530",
+    "@remotion/cli": "4.0.530",
+    "@remotion/renderer": "4.0.530",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.530"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}
