@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>12 — What Airflow is, and the hand-off</title>
+<meta name="description" content="What Airflow is and is not, what it replaces that cron and a script were doing, and the path one task takes between the API server, the DAG processor, the scheduler, the workers and the triggerer.">
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to the lesson</a>
+
+<div class="lesson">
+
+<header class="masthead">
+  <p class="eyebrow">Nightly — lesson 12</p>
+  <h1>What Airflow is, and the hand-off</h1>
+  <p class="standfirst">After this lesson a stack trace is a sentence you can parse
+  rather than a thing to guess at. You will know which of five processes to open
+  a log in, and you will know that one of the six things everyone names is not a
+  process at all.</p>
+</header>
+
+<main id="main">
+
+  <p class="lede">You have already solved this problem, with worse tools and a
+  better memory for what breaks: a crontab entry, a shell script, a log file, and
+  a habit of checking the log file at eight in the morning. Airflow does the same
+  job. The question worth an hour is which parts of the job it is actually doing
+  for you, because the parts it is not doing are the parts that will still be
+  broken at three in the morning when you are asleep.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">Why this lesson is here at all.</span>
+    Every other concept in this course is taught the moment the pipeline needs
+    it, which is most of why the course works: you meet a thing because something
+    is broken by its absence. This is the single exception, and the reason is a
+    fact about the reader rather than a preference about pedagogy. You arrive
+    without the mental model, not merely without the syntax. A learner who writes
+    their first DAG without it will still get the DAG to parse; what they cannot
+    do is read the thing that goes wrong.
+  </aside>
+
+  <h2 id="read">The read</h2>
+
+  <h3 id="what-it-is">What it is, and what it is not</h3>
+
+  <p><strong>Airflow is a batch orchestrator with three jobs: decide, delegate,
+  remember.</strong> Decide means working out which units of work are due and
+  whether their dependencies are satisfied. Delegate means handing each unit to
+  something that can execute it. Remember means writing down what happened, where,
+  and when. That is the whole product; everything else in this course is one of
+  those three in more detail. A DAG is the shape the work is declared in — a
+  Python file naming tasks and the order between them — and it is the one part of
+  the system you actually write.</p>
+
+  <p>What it is not, stated as five claims you can act on:</p>
+
+  <p><strong>It is not the thing that computes.</strong> Your task does the work:
+  a query, a <code>dbt run</code>, a POST. Airflow decides when and whether. The
+  practical test is whether your logic survives deleting Airflow. Logic that
+  exists only inside an operator cannot be run, tested or reused outside one, so
+  on the day the orchestrator is wrong you have no second opinion.</p>
+
+  <p><strong>It is not a stream processor.</strong> Runs are intervals, not
+  events. A run is defined by the data between two timestamps, which is a batch
+  with a label, and the label is a thing you will be glad of later and annoyed by
+  in the meantime. Genuinely continuous ingestion is a different tool and this
+  course does not pretend otherwise.</p>
+
+  <p><strong>It is not a job runner.</strong> A unit of work occupies capacity
+  for as long as it runs, and Airflow is explicit about capacity — pools, slots,
+  concurrency limits — because the alternative is one slow job quietly starving
+  every other DAG. A unit that must finish in two hundred milliseconds, or one
+  that waits four hours for a file to appear, is the wrong shape here. The
+  triggerer exists because the waiting case is common enough to deserve its own
+  answer.</p>
+
+  <p><strong>It is not where business rules live.</strong> The rule that a
+  cancelled order is not revenue is a rule about the data, so it belongs where the
+  data is transformed — a dbt model, in a layer that is tested. Written inside a
+  task, the same rule exists twice, is tested once, and is quietly wrong the
+  other time.</p>
+
+  <p><strong>It is not automatically the right tool.</strong> If one script runs
+  at three in the morning and has run there for two years, adopting Airflow is a
+  downgrade: more processes, more ways to be wrong, one more dependency to pin,
+  and a failure mode where nothing runs at all because one container is unhealthy
+  and nothing told you. Reach for it when something about that breaks — jobs whose
+  order matters, a backfill nobody wants to do by hand at eleven at night, a
+  question about <em>why</em> Tuesday was late — and not before. This course's
+  own definition of success includes being able to name the condition under which
+  Airflow is the wrong answer, and it is not a rhetorical one.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">Against the six-hour video.</span>
+    The source material this course is correcting teaches the architecture
+    correctly — Airflow 3, the real component topology, the Task SDK — and then
+    never lets you practise it: fifteen DAGs that are all
+    <code>print()</code> and <code>echo</code>, no data, no failure, and a
+    triggerer deployed in its own compose file and never explained. A correct
+    architecture demonstrated against <code>echo</code> is an architecture you
+    can describe and not yet use.
+  </aside>
+
+  <h3 id="what-it-replaces">What it replaces</h3>
+
+  <p><strong>Not cron.</strong> Cron is a scheduler: at a time, start a process.
+  Airflow is that too, and it is strictly more machinery for the same job. What
+  Airflow replaces is the protocol you hand-wrote around cron — the part that
+  actually takes the work.</p>
+
+  <dl class="spec-list">
+    <dt>Chaining</dt>
+    <dd><code>30 2 * * * load_orders.sh &amp;&amp; 30 3 * * * dbt_run.sh</code> —
+    except cron starts the second line whether the first finished at 02:31 or
+    03:29. An edge in the graph: the second task does not begin until the first
+    has succeeded.</dd>
+
+    <dt>Retries</dt>
+    <dd><code>until curl …; do sleep 5; done</code> in a script, with an attempt
+    cap nobody remembers. A count on the task, with a delay, recorded against the
+    run.</dd>
+
+    <dt>Backfill</dt>
+    <dd>A second crontab file written at eleven at night with yesterday's date
+    typed into it. A run over a date range, through the same code, recorded as a
+    run you can look at afterwards.</dd>
+
+    <dt>Idempotency</dt>
+    <dd>A convention everyone is supposed to follow and nobody can check. The
+    same convention, and this repository's primary test seam checks it on every
+    module by running the pipeline twice and comparing what the warehouse
+    holds.</dd>
+
+    <dt>Knowing what happened</dt>
+    <dd><code>tail -n 200 /var/log/load_orders.log</code>, on the chance that the
+    log is still there. One row per task instance, with a state and a start and
+    an end, that you can ask questions of.</dd>
+
+    <dt>Why did it not run</dt>
+    <dd>Usually a person, usually an hour. A row that says
+    <code>queued</code>, <code>scheduled</code>, <code>running</code>,
+    <code>failed</code>, or absent entirely, with the reason in the row or in the
+    component's log.</dd>
+
+    <dt>Secrets</dt>
+    <dd><code>export API_KEY=…</code> at the top of the script, in a file nobody
+    reads past line one. A named credential in Airflow's own store, referenced by
+    name, masked by the CLI, never in a DAG file.</dd>
+  </dl>
+
+  <p>Every one of those is a thing you could have kept doing by hand, and most
+  pipelines out there still are. What changes is that the hand-written version is
+  knowledge rather than a system: it lives in the heads of two people, it does not
+  survive either of them leaving, and the backfill takes an evening. That is the
+  whole trade, and it is worth making deliberately rather than by drift.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">The stack is eight containers, not five.</span>
+    Run <code>docker ps</code> after <code>astro dev start</code> and you will
+    count seven, which is the answer and not a contradiction: the stack defines
+    eight. The seven you see are the four Airflow components, Airflow's own
+    Postgres, the course warehouse, and the synthetic orders API. The eighth is
+    <code>db-migration</code>, a one-shot that migrates the schema and exits
+    before you are in a position to type anything. Only four of the eight are in
+    the list below, and the executor that fills the worker's role is not a
+    container at all. The measured shape, and the command that regenerates it,
+    are in the environment baseline.
+  </aside>
+
+  <h3 id="components">The components, and the one that is not a component</h3>
+
+  <p>Airflow 3 is five components and a database. Each component has one job and
+  the job is short enough to hold in your head. What is missing from the list is
+  the thing most tutorials lead with, and that omission is the last entry rather
+  than an oversight.</p>
+
+  <dl class="spec-list">
+    <dt>The API server</dt>
+    <dd>The only component that answers questions. The browser is a client of it;
+    <code>curl localhost:8080/api/v2/…</code> is a client of it; and in Airflow 3
+    a task calling <code>Connection.get(…)</code> is a client of it too, because
+    that call leaves the worker and crosses to this process rather than touching
+    the database. It holds no pipeline logic. It is the only <em>Airflow</em>
+    service in this stack with a published host port — the other three publish
+    nothing, because you do not talk to them, you read the metadata database
+    instead — and if the UI is empty while your files are on disk, this is the
+    first place to look.</dd>
+
+    <dt>The DAG processor</dt>
+    <dd>Reads every file in the DAG bundle, imports it, and writes what it found
+    into the metadata database. Its defining property is what it does
+    <em>not</em> do: it never runs your task code. It builds the graph and stops.
+    In Airflow 2 this was part of the scheduler; in Airflow 3 it is a separate
+    process precisely so that a DAG file which does something expensive at import
+    time cannot do it inside the component that decides what runs next. The
+    consequence you meet first: a DAG that fails to import is simply absent from
+    the UI, and the error is in this component's log rather than in a task
+    log.</dd>
+
+    <dt>The scheduler</dt>
+    <dd>Decides what should be happening now. It reads the serialized DAGs, works
+    out which task instances are due, checks their dependencies, respects pools
+    and concurrency, and writes the rows that mark a task
+    <code>queued</code> and then <code>scheduled</code> when something can take
+    it. It does not run your code and it never touches your data. In this stack
+    it is also the machine your code runs on, for the reason given at the bottom
+    of this list.</dd>
+
+    <dt>The workers</dt>
+    <dd>The role, and — this is the part that surprises people — no container in
+    this stack. A worker executes what the scheduler hands it, starting a fresh
+    subprocess per task instance: nothing is pooled or reused between tasks, which
+    is why <em>N</em> concurrent task instances cost <em>N</em> subprocesses plus
+    whatever the code itself spawns. If you arrived from a Celery or Kubernetes
+    deployment and went looking for a worker container, you found nothing, and the
+    next entry is why.</dd>
+
+    <dt>The triggerer</dt>
+    <dd>Runs the tasks that stopped waiting without finishing. A sensor that must
+    wait for a file, and a deferrable operator, hand their waiting to the
+    triggerer and give their worker slot back; the triggerer wakes when the
+    condition is met and the task resumes. It is running in your stack right now
+    and it has nothing to do, because nothing here defers yet. You will meet it
+    for real when you meet a sensor, which is why it is worth naming now: it is
+    not optional in Airflow 3, and it is the component the six-hour video deploys
+    in a separate compose file without ever saying what it is for.</dd>
+
+    <dt>The executor — a configuration property, not a component</dt>
+    <dd>This is the one to keep. The executor answers exactly one question: the
+    scheduler has decided this task should run, so <em>who runs it?</em> It
+    answers with a value, not a process. In this stack the value is
+    <code>AIRFLOW__CORE__EXECUTOR=LocalExecutor</code>, set on every Airflow
+    service. <code>LocalExecutor</code> answers "a subprocess on the machine the
+    scheduler is on"; <code>CeleryExecutor</code> answers "a worker in a fleet
+    behind a message broker"; <code>KubernetesExecutor</code> answers "a
+    Kubernetes job". None of those answers is a container you can
+    <code>docker exec</code> into, which is exactly why the executor is not in
+    the list above and why a stack trace mentioning it is telling you about a
+    placement decision rather than about a process that crashed. Locally you
+    cannot change it — the Astro CLI hardcodes <code>LocalExecutor</code> with
+    no flag — which is a course decision recorded in ADR 0003, not an Airflow
+    limitation.</dd>
+  </dl>
+
+  <p class="live-file">Live file: <code><a href="../reference/generated-compose.json">&lt;repo&gt;/reference/generated-compose.json</a></code> — the resolved compose model, recovered from the running containers, carrying that executor value per service</p>
+
+  <p><strong>The sixth thing, which is also not a component.</strong> Everything
+  above shares one Postgres, the service called <code>postgres</code>, holding
+  <code>dag</code>, <code>serialized_dag</code>,
+  <code>task_instance</code>, <code>dag_run</code> and
+  <code>connection</code>. On the container network it answers to
+  <code>postgres:5432</code>; on your host it is published as
+  <code>localhost:12217</code>, because <code>5433</code> is already the course
+  warehouse's and the two databases are not the same database. The
+  components do not pass work to each other by
+  talking to each other. They pass it by writing rows in a database they all share,
+  and the API server reads those rows back to draw the grid. That is why a square
+  can be green for a task that finished four minutes ago, and why
+  <code>task_instance</code> is the first table worth learning in this whole
+  system.</p>
+
+  <h3 id="handoff">The hand-off</h3>
+
+  <p>Here is the path one task takes, and the order it takes it in. Four boxes,
+  four arrows, one database underneath — and the thing to notice is that every
+  arrow is a row.</p>
+
+  <figure class="motion">
+    <video class="screen-only" controls preload="none" playsinline
+           poster=""
+           width="1920" height="1080">
+      <source src="../motion/clips/airflow-handoff.mp4" type="video/mp4">
+      Your browser cannot play this clip. The text around it carries the same
+      claim, beat for beat.
+    </video>
+    <figcaption>One task, four processes. A DAG file on disk is parsed by the DAG
+    processor, which writes the serialized DAG to the metadata database; the
+    scheduler creates the task instance, and its state reads
+    <code>queued</code>; when the dependencies are met and something can take it,
+    <code>scheduled</code>; a worker runs it, <code>running</code>; the task
+    returns, and the state is written back as <code>success</code>. The dashed bar
+    is the metadata database holding both the serialized DAG and the task state.
+    The panel underneath is one task instance row — <code>orders / extract</code>
+    — changing state, with the API server reading that same row to draw the grid.
+    Fifteen seconds; the whole text of this page, and this caption, carry the
+    same claim for a reader who cannot play it.</figcaption>
+  </figure>
+
+  <p class="live-file">Committed media: <code><a href="../motion/clips/airflow-handoff.mp4">&lt;repo&gt;/motion/clips/airflow-handoff.mp4</a></code> — <a href="../motion/">authoring source</a></p>
+
+  <p>The clip's first card names a generic path rather than a real one. The file
+  this repository actually runs is
+  <a href="../dags/pipeline/nightly_order_kpis.py"><code>dags/pipeline/nightly_order_kpis.py</code></a>,
+  and the first card stands for it.</p>
+
+  <p><strong>Why this one is a video and the rest of the course is not.</strong>
+  A hand-off is four processes and an ordered state change, and the ordering is
+  the content: a task instance is <code>queued</code>, then
+  <code>scheduled</code>, then <code>running</code>, then
+  <code>success</code>, and each arrow belongs to a different component. Prose can
+  state that in a sentence, and a table can print it, and a diagram can show it
+  once. What none of those can do is let you watch the moment the state changes —
+  which is the moment a real failure happens, and the moment you want to re-watch
+  for the third time an hour later. The material this course is correcting spends
+  roughly eighty minutes of whiteboard on exactly this picture. Fifteen seconds
+  with a replay button is the same idea, and it is the only place in the course
+  where motion earns its weight; everything else is a table or a picture, and the
+  rule that says so is ADR 0002.</p>
+
+  <h2 id="crosslinks-heading">Related</h2>
+  <nav class="crosslinks" aria-labelledby="crosslinks-heading">
+    <span class="crosslinks-label">Related documents</span>
+    <ul>
+      <li><a href="../reference/environment-baseline.md">Environment baseline — what the stack actually runs, measured</a></li>
+      <li><a href="../docs/adr/0002-html-lessons-spine-remotion-for-motion.md">ADR 0002 — why there is one clip and no others</a></li>
+      <li><a href="../docs/adr/0003-astro-cli-over-vanilla-compose.md">ADR 0003 — why the executor is fixed locally</a></li>
+      <li><a href="09-the-pipeline-assertion.html#read">Lesson 09 — the primary seam, and what "externally observable" means there</a></li>
+      <li><a href="000-template-specimen.html#anatomy">Lesson specimen — the six-part anatomy this page follows</a></li>
+      <li><a href="../RESOURCES.md">RESOURCES.md — the source-of-truth list this page cites from</a></li>
+    </ul>
+  </nav>
+
+  <div class="worked-ref">
+    <span class="worked-ref-label">Worked example</span>
+    <p>The worked example for this exercise is a real DAG in this repository, and
+    it is deliberately not in this page. Open
+    <code>dags/pipeline/warehouse_connection_check.py</code> and read it against
+    the list above, line by line, naming the component on the other end of each
+    line. The module import is the DAG processor. The <code>@dag</code> and
+    <code>@task</code> decorators are how a file becomes a graph at all, and
+    nothing about them is magic — they are the Task SDK's sugar, imported from
+    <code>airflow.sdk</code> rather than from Airflow's internals. Every
+    <code>Connection.get(…)</code> is a task asking the API server for something.
+    The <code>endpoint</code> value passed from one task to the next is stored in
+    the metadata database and rendered in the task UI, which is why that function
+    returns the warehouse's address and deliberately does not return its password.
+    And <code>schedule=None</code> means the scheduler will never touch it at all,
+    which is why the grid you watch for it says "on demand". It is the smallest
+    complete example in the repository of the whole model, and a reader stuck on
+    the exercise can open it and see the hand-off in code without a single line of
+    it appearing on this page.</p>
+    <p class="live-file">Live file: <code><a href="../dags/pipeline/warehouse_connection_check.py">&lt;repo&gt;/dags/pipeline/warehouse_connection_check.py</a></code></p>
+  </div>
+
+  <section class="exercise" aria-labelledby="exercise-heading">
+    <h2 id="exercise-heading">Exercise</h2>
+
+    <div class="spec-part">
+      <span class="spec-label">Requirement</span>
+      <p>Record the hand-off as it actually happens in your own stack, in
+      <code>learning-records/12-orientation.md</code>, so that every sentence in it
+      is a thing you looked at rather than a thing you were told. The directory
+      ships empty — it is the same convention <code>include/</code> and
+      <code>plugins/</code> use. Write the record; this page does not contain it.</p>
+    </div>
+
+    <dl class="spec-list">
+      <dt>Input</dt>
+      <dd>The stack, up, with its four Airflow components, its metadata database
+      and the two DAGs the course already ships. You have not written a DAG, and
+      this exercise does not ask you to: the next lesson is the one that does
+      that.</dd>
+
+      <dt>Output</dt>
+      <dd>One file at <code>learning-records/12-orientation.md</code> carrying
+      five entries and one trace: an entry each for the API server, the DAG
+      processor, the scheduler, the workers and the triggerer, and a sixth entry
+      for the executor; plus one task instance traced from
+      <code>task_instance</code>, in the order the states actually appear there.</dd>
+
+      <dt>Interface surface</dt>
+      <dd>The component names and jobs as this page gives them, and these: the
+      container names and the command each one runs, which
+      <code>reference/generated-compose.json</code> records; <code>docker logs
+      &lt;container&gt;</code>; <code>docker exec airflow-course_d896a3-postgres-1
+      psql -U postgres -d postgres</code>, which reaches the metadata database and
+      nothing else; <code>airflow dags list</code> and <code>airflow dags
+      list-import-errors</code>; the Airflow REST API at
+      <code>localhost:8080/api/v2/</code>; and the live files the course already
+      commits, which are the working example of the shape you are recording.</dd>
+
+      <dt>Constraints</dt>
+      <dd>
+        <ul>
+          <li>Every claim names the place you read it — a container, a column, a
+          file, a timestamp. A sentence with no source is an opinion, and an
+          opinion is the one thing this record is not allowed to contain.</li>
+          <li>The executor's entry is written as a configuration value and a
+          consequence you observed, never as a process. If your entry contains the
+          word "container", it is wrong.</li>
+          <li>The trace comes from <code>task_instance</code>, not from the grid.
+          The grid is a read of those rows; taking it as the evidence means you
+          have recorded the UI, which already existed before this lesson.</li>
+          <li>Report what the timestamps actually show, including any transition
+          in the clip's four states that the data does not show as a separate
+          moment. "They are all there" is the answer only if you checked the
+          columns rather than the state.</li>
+          <li>"Task code never touches the metadata database" has to be
+          demonstrated, not repeated: name the API the code went through instead,
+          and cite a line in a file in this repository rather than a document.</li>
+          <li>Include one claim about the hand-off that the UI does not show at
+          all, and say where you found it. If your answer is "it is right there in
+          the grid", keep looking — the grid is a rendering.</li>
+          <li>Nothing new under <code>dags/</code>. A third parsed DAG fails the
+          repository's primary gate by design, and the gate is the one command
+          this course judges work by: <code>.venv/Scripts/python
+          tests/assert_pipeline_kpis.py</code> must still exit zero when you are
+          done.</li>
+          <li>Written for a reader with no Airflow. Your own reading notes are
+          not the deliverable; a record that proves the model is.</li>
+        </ul>
+      </dd>
+    </dl>
+
+    <div class="spec-part">
+      <span class="spec-label">How you know it passes</span>
+      <p>The command still exits zero, and every line of the record is a line
+      somebody else could check without asking you anything. The two that will
+      not pass review are a trace quoted from the grid, and an executor entry
+      that describes a process.</p>
+
+      <pre><code><span class="cmt"># The primary seam is unchanged by anything you did today:</span>
+.venv/Scripts/python tests/assert_pipeline_kpis.py   <span class="cmt"># exits 0</span>
+
+<span class="cmt"># Then, with the stack up, the two reads your record has to be able</span>
+<span class="cmt"># to survive being repeated by someone else:</span>
+docker ps --format "{{.Names}} {{.Status}}"
+docker exec airflow-course_d896a3-postgres-1 psql -U postgres -d postgres \
+  -c "select task_id, state, queued_dttm, scheduled_dttm, start_date, end_date from task_instance order by start_date desc limit 9;"</code></pre>
+    </div>
+  </section>
+
+  <div class="built">
+    <span class="built-label">What was just built</span>
+    <p>A mental model, and the word for it is deliberate: five components with one
+    job each — the API server answering, the DAG processor parsing and never
+    running, the scheduler deciding, the workers executing, the triggerer waiting
+    on their behalf — the executor named as the configuration property it is, and
+    the path one task takes between them, from a Python file on disk to a row the
+    API server reads back to draw a grid. Nothing was executed and nothing was
+    written; what exists now is a way of reading the next failure.</p>
+  </div>
+
+  <div class="source">
+    <span class="source-label">Primary source</span>
+    <p>Every claim on this page about what a component does comes from the
+    <a href="https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/overview.html">Airflow
+    3 architecture overview</a>, read at the pinned version <strong>3.3.2</strong>.
+    It is the entry in <code>RESOURCES.md</code> that names the five components,
+    and it is explicit about the point this page is built around: the executor "is
+    a configuration property of the scheduler, not a separate component and runs
+    within the scheduler process". It also says the API server "is also used by
+    tasks using the task SDK to communicate state back to Airflow, without
+    requiring direct access to the metadata database", that the DAG processor is
+    "a required component in all Airflow 3 deployments" which "always runs as a
+    standalone process" so that the scheduler never executes DAG author's code, and
+    that the triggerer "executes deferred tasks in an asyncio event loop" and is
+    not needed at all where nothing defers. The worker description there is the one
+    that explains the empty container list: a worker "executes the tasks given to
+    it by the scheduler", and "in the basic installation worker might be part of
+    the scheduler not a separate component". Everything this page says about
+    <em>this</em> stack — seven running containers, the executor value, the
+    version the container reports — is measured, not quoted, and lives in
+    <a href="../reference/environment-baseline.md">the environment baseline</a>.</p>
+  </div>
+
+  <div class="next-source">
+    <span class="next-source-label">Read next</span>
+    <p>Read <a href="https://airflow.apache.org/docs/apache-airflow/stable/public-airflow-interface.html#using-the-public-interface-for-dag-authors">the
+    Airflow public interface for DAG authors</a>, read at the pinned version
+    <strong>3.3.2</strong>, and pay attention to what it says you may import. The
+    next lesson writes a DAG, and the surface it writes against is
+    <code>airflow.sdk</code> — not the internal modules, and not the database. The
+    same page's section on what is <em>not</em> public is the shortest statement of
+    the constraint this page's last claim rests on: direct metadata database
+    access from task code "is no longer allowed", and "workers communicate
+    exclusively through the Execution API". That is the same edge the clip draws
+    between the worker and the database, stated as a rule you will be held to
+    rather than a picture you have seen.</p>
+  </div>
+
+  <div class="followup" id="before-you-move-on">
+    <span class="followup-label">Before you move on</span>
+    <p>This stack spends five processes and a database to do what one crontab line
+    and three shell scripts did for the course's first year. Argue for the
+    specific condition that would make you take the cron-and-script version back
+    — not a preference, a condition with a name: a cost, a failure, a deadline, a
+    team. Then name which of the five you would delete first if you made that
+    call, and what you would have to rebuild by hand the morning after. If your
+    condition is "Airflow is too complicated", you have restated the exercise
+    rather than answered it.</p>
+  </div>
+
+</main>
+
+<footer class="endmatter">
+  <p>Lesson 12 of Nightly. Open it directly — there is no build step and no
+  running toolchain. Shared stylesheet:
+  <a href="../assets/lesson.css"><code>assets/lesson.css</code></a>.</p>
+</footer>
+
+</div>
+</body>
+</html>
