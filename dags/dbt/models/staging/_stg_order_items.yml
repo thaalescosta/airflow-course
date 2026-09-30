@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: stg_order_items
+    description: >-
+      One row per order line item, unnested from stg_orders.items and retyped.
+      Carries the order-level columns an unnesting lateral join would otherwise
+      throw away, so no downstream model has to join back to stg_orders.
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+      - name: sku
+        data_tests:
+          - not_null
+      - name: quantity
+        data_tests:
+          - not_null
+      - name: unit_price_cents
+        data_tests:
+          - not_null
+      - name: line_total_cents
+        data_tests:
+          - not_null

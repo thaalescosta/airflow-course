@@ -1,3 +1,21 @@
+# Two services this course adds to the stack Astro generates:
+#
+#   warehouse-postgres   the course's application warehouse (a second Postgres)
+#   orders-api           the synthetic orders API, the pipeline's only data source
+#
+# Both are reached by Airflow task code over the `airflow` network by service
+# name, which is the one thing about service-to-service addressing that has to
+# be learned here rather than read about. See reference/environment-baseline.md
+# §7 for the two traps that are not guessable: an override service needs
+# `networks: [airflow]`, and `${VAR}` is not interpolated from the project's
+# `.env` by `astro dev start`.
+#
+# Neither service is part of the pipeline repository's source. The API lives in
+# its own project (ADR 0005) so the portfolio artifact holds only the pipeline
+# and the dbt project; the image below is built from that sibling checkout, and
+# `docker build -t orders-api:1.0.0 .` in it is what puts the tag on this box.
+#
+# ---------------------------------------------------------------------------
 # Course application warehouse.
 #
 # Astro already runs a Postgres for Airflow's own metadata database. That is a
@@ -60,6 +78,48 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # The synthetic orders API, ADR 0005. Frozen fixture: `orders-api/1.0.0`, the
+  # same contract recorded in reference/orders-api-contract.md.
+  #
+  # The image is a local build rather than a registry pull, because the API is a
+  # separate project that this repository does not own and must not vendor. The
+  # tag carries the contract version, which is the only thing this repository
+  # pins; the upstream build pins its own base image by digest, so the tag names
+  # a reproducible image rather than whatever `latest` happened to be.
+  #
+  # No `container_name`, for the same reason as the warehouse: it would replace
+  # the service name as the network alias, and `orders-api` is the hostname
+  # dags/pipeline/ resolves. `networks: [airflow]` is load-bearing for the same
+  # reason as above and is not optional.
+  orders-api:
+    image: orders-api:1.0.0
+    # `python:3.14.7-slim` ships neither curl nor wget, and the fixture has no
+    # reason to grow one. Python is already in the image, so the healthcheck
+    # speaks HTTP with the interpreter instead of adding a package to reach it.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as r; raise SystemExit(0 if r.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Published to the host as well as joined to the `airflow` network, for two
+    # distinct reasons that must not be confused:
+    #
+    #   * dags/pipeline/ reaches it as `http://orders-api:8000`, over the
+    #     container network, by service name. That is the lesson.
+    #   * the pipeline assertion reaches it as `http://127.0.0.1:8010`, from
+    #     outside the stack, to compute its expected values over HTTP rather
+    #     than by reading the warehouse the models under test write to.
+    #
+    # Bound to loopback only. Nothing on the LAN can reach the fixture.
+    ports:
+      - "127.0.0.1:8010:8000"
+    networks:
+      - airflow
 
 secrets:
   warehouse_pg_password:

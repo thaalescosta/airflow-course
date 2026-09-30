@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: int_orders_enriched
+    description: >-
+      One row per order, at the order's own grain, carrying the pipeline's two
+      business rules: the UTC business date of created_at, and whether the
+      order counts as net sales. Every model above this one is arithmetic over
+      these two decisions.
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+          - not_null
+      - name: order_date
+        data_tests:
+          - not_null
+      - name: units_total
+        data_tests:
+          - not_null

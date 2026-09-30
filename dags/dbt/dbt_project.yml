@@ -10,8 +10,18 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# One layer per folder, one schema per layer, so a reader of the warehouse can
+# tell which model decided what: `stg_` renamed and retyped, `int_` decided,
+# `fct_` reported. dbt's own default would put every model in one schema and
+# leave that distinction to the file names alone.
 models:
   airflow_course:
     staging:
       +materialized: table
       +schema: staging
+    intermediate:
+      +materialized: table
+      +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts

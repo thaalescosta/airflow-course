@@ -1,0 +1,15 @@
+# Line endings are not a style preference in this repository. Git's index
+# already stores LF for every text file here, so the only thing `core.autocrlf`
+# changes is the working tree - and the working tree is what gets bind-mounted
+# into Linux containers. A shell script checked out with CRLF fails there with
+#
+#     /usr/local/bin/dbt-entrypoint: 1: set: Illegal option -
+#
+# which names neither the file nor the cause, because `sh` reads `set -eu\r` as
+# an unknown option rather than as a line ending. Pinning `eol=lf` makes the
+# working tree agree with the index on Windows as well, so the file that is
+# edited on this machine is the file that runs in the container.
+#
+# `text=auto` keeps binary artifacts - the committed Remotion media under
+# `motion/` - out of it: git detects them as binary and this rule never applies.
+* text=auto eol=lf

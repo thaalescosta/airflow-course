@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: fct_daily_order_kpis
+    description: >-
+      One row per business day. The table the pipeline exists to produce, and
+      the relation the course's pipeline assertion reads. Money is integer
+      cents throughout; a day with no net orders has a NULL average order value
+      rather than a zero.
+    columns:
+      - name: order_date
+        description: UTC calendar date of the order's created_at.
+        data_tests:
+          - unique
+          - not_null
+      - name: orders_total
+        data_tests:
+          - not_null
+      - name: customers_total
+        data_tests:
+          - not_null
+      - name: units_total
+        data_tests:
+          - not_null
+      - name: line_items_total
+        data_tests:
+          - not_null
+      - name: gross_merchandise_cents
+        data_tests:
+          - not_null
+      - name: net_orders
+        data_tests:
+          - not_null
+      - name: net_merchandise_cents
+        data_tests:
+          - not_null
+      - name: cancelled_orders
+        data_tests:
+          - not_null
+      - name: returned_orders
+        data_tests:
+          - not_null
