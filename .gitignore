@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Airflow
+airflow.db
+airflow-webserver.pid
+logs/
+dags/logs/
+standalone_admin_password.txt
+airflow_settings/
+airflow.cfg
+
+# Astro CLI (config.yaml is meaningful and tracked)
+.astro/*
+!.astro/config.yaml
+
+# dbt
+dbt_packages/
+dbt_modules/
+target/
+logs/dbt.log
+
+# Remotion / Node
+node_modules/
+out/
+.remotion/
+build/
+*.tsbuildinfo
+
+# Secrets
+.env
+.env.local
+
+# Local tooling
+.impeccable/
+.agents/
+.codex/
+
+# Local scratch (specs and tickets live as GitHub issues)
+.scratch/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
