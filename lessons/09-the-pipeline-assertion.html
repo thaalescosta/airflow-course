@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>09 — The pipeline assertion</title>
+<meta name="description" content="Build the one command that proves the nightly pipeline produces correct KPIs, by computing what the numbers should be without asking the models.">
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to the lesson</a>
+
+<div class="lesson">
+
+<header class="masthead">
+  <p class="eyebrow">Nightly — lesson 09</p>
+  <h1>The pipeline assertion</h1>
+  <p class="standfirst">After this lesson you have one command that proves the
+  nightly pipeline produces the right numbers, and you know why the hardest part
+  of writing it is not the pipeline.</p>
+</header>
+
+<main id="main">
+
+  <p class="lede">Everything up to here has been a pipeline that runs. It parses,
+  it schedules, it extracts, dbt builds four models, and a table of daily KPIs
+  appears in the warehouse. Every one of those numbers is currently a claim the
+  course is making about itself and has not checked once.</p>
+
+  <h2 id="read">The read</h2>
+
+  <p><strong>The hard part is the expectation, not the check.</strong> Comparing
+  a table to a table is easy. What is worth doing is the comparison, and that
+  means deciding what the right numbers are — which is the same problem the dbt
+  models already solved. The obvious move is to ask the models: build the same
+  query twice, or read the values out of a staging model and compare. Do not do
+  that. An expectation produced by the thing under test cannot fail for a reason
+  that matters. It fails when a column is renamed, or when a schema moves, and
+  it stays silent on the day someone changes a business rule and gets the same
+  wrong answer twice.</p>
+
+  <p>So the expectation is a second implementation of the same rules in a
+  different language. The pipeline states "an order that is cancelled or returned
+  did not produce revenue" once, in SQL, in
+  <code>int_orders_enriched.sql</code>. The assertion states it again in Python,
+  over HTTP, from the orders API, and adds up integers. Two statements of one
+  rule is the price of an independent answer, and the disagreement between them
+  is not noise — it is the entire value of the exercise. It is also the moment
+  the argument becomes real: if the two disagree about which orders count as
+  revenue, one of them has misread the rule, and you have learned something about
+  the rule that neither implementation could have taught you alone.</p>
+
+  <p class="live-file">Live file: <code><a href="../dags/dbt/models/intermediate/int_orders_enriched.sql">&lt;repo&gt;/dags/dbt/models/intermediate/int_orders_enriched.sql</a></code></p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">On the page size.</span>
+    The assertion walks the API's pagination at 500 rows per page; the pipeline
+    asks for 1000. That is not a rounding difference. If both clients paged the
+    same way over the same boundaries, a shared misunderstanding of the envelope
+    would cancel out and both would agree on the wrong answer. Different
+    boundaries, same rows, is the check.
+  </aside>
+
+  <p><strong>Why twice.</strong> One pass proves a number. Two passes over the
+  same window prove something stronger and much rarer: that the pipeline is a
+  function of its inputs rather than of its history. An extraction that appends
+  instead of upserting produces the right table the first time and twice as many
+  rows the second. A model that accumulates instead of replacing does the same.
+  Airflow's own guidance is that a task's re-run must produce the same outcome,
+  and that the way to get there is to replace <code>INSERT</code> with
+  <code>UPSERT</code> — so the second run is not an extra nicety, it is the
+  property the framework is asking you for.</p>
+
+  <p><strong>What the assertion is allowed to look at.</strong> Only the
+  warehouse, and Airflow's report of the run it triggered. It does not import a
+  pipeline module and it does not search a source file for a string, because
+  either one lets the pipeline be renamed into passing: assert that a model is
+  called <code>fct_daily_order_kpis</code> or that a file contains
+  <code>counts_as_net_sale</code>, and the assertion survives the day someone fixes
+  a bug by renaming a column while going green on the day someone breaks a number.
+  A whole-pipeline assertion that reads internals is a test of the author's
+  memory.</p>
+
+  <p>Two of the pipeline's claims are genuinely not visible in its output, and
+  for those the assertion reads Airflow's state. The first is that Cosmos rendered
+  every dbt model into a task: a model missing from the graph still leaves a
+  correct table if an earlier run built it. The second is that the run read the
+  window it was asked for — read from the task's own returned value, because two
+  runs of the same window have different logical dates and that difference has to
+  be shown not to matter.</p>
+
+  <aside class="sidenote">
+    <span class="sidenote-label">The Airflow 3 thing.</span>
+    <code>schedule="@daily"</code> does not mean what it looks like. It resolves
+    to <code>CronTriggerTimetable</code>, whose data interval is a single instant
+    — the run labelled 2026-10-01 has the interval [2026-10-01, 2026-10-01) — so
+    a pipeline that extracts the day that just ended raises on every scheduled run
+    and reads nothing. Manually triggered runs pass, because they take their
+    window from configuration instead. This project declares
+    <code>CronDataIntervalTimetable</code> in
+    <code>dags/pipeline/intervals.py</code>; the measurements are in the
+    environment baseline, and the reasoning is why that file exists.
+  </aside>
+
+  <p>What comes out the other end is one command, from the repository root, that
+  is also the onboarding gate — it checks that the stack is up, that Cosmos
+  imports where DAGs are parsed, that dbt is executable where tasks run, that the
+  data source resolves by service name, that a DAG parses — and then does the one
+  thing the course exists to be able to do.</p>
+
+  <p class="live-file">Live file: <code><a href="../tests/assert_pipeline_kpis.py">&lt;repo&gt;/tests/assert_pipeline_kpis.py</a></code></p>
+  <p class="live-file">Live file: <code><a href="../reference/testing-seams.md">&lt;repo&gt;/reference/testing-seams.md</a></code></p>
+
+  <p><strong>What comes next is not a second assertion.</strong> This is the
+  primary seam, and every module after this one extends it rather than adding to
+  it: a new model joins the list of models Cosmos must have rendered, a new column
+  joins the list of columns compared, and the existing command's output changes
+  because the pipeline now does more. The test for any proposed new check is
+  whether breaking it would leave the pipeline wrong in a way a reader would care
+  about. If the only consequence is that a test would fail, it belongs at one of
+  the other three seams.</p>
+
+  <h2 id="crosslinks-heading">Related</h2>
+  <nav class="crosslinks" aria-labelledby="crosslinks-heading">
+    <span class="crosslinks-label">Related documents</span>
+    <ul>
+      <li><a href="../reference/environment-baseline.md">Environment baseline — what the stack actually does, measured</a></li>
+      <li><a href="../AGENTS.md#test-seams-four">AGENTS.md — the four seams, and which one is primary</a></li>
+      <li><a href="../docs/adr/0006-dbt-standalone-before-cosmos.md">ADR 0006 — why dbt runs standalone before Cosmos</a></li>
+      <li><a href="000-template-specimen.html#anatomy">Lesson specimen — the six-part anatomy this page follows</a></li>
+    </ul>
+  </nav>
+
+  <div class="worked-ref">
+    <span class="worked-ref-label">Worked example</span>
+    <p>The worked example for this exercise is the assertion itself, and it is
+    deliberately not in this page. Open
+    <code>tests/assert_pipeline_kpis.py</code> and read it in this order: the module
+    docstring, which says what the file is for and why the expectation is not
+    SQL; then <code>expected_daily_kpis()</code>, which is the second
+    implementation; then <code>compare()</code>, which is the whole comparison.
+    What to look for in it is what is <em>not</em> there — no
+    <code>select</code> against a staging model, no import from
+    <code>dags.pipeline</code>, no assertion on the text of a file. A reader stuck
+    on the exercise can open that file and see a completed version of the same
+    ideas; a reader working through the exercise cannot transcribe a line out of
+    this page, because the implementation is in the repository and not here.</p>
+    <p class="live-file">Live file: <code><a href="../tests/assert_pipeline_kpis.py">&lt;repo&gt;/tests/assert_pipeline_kpis.py</a></code></p>
+  </div>
+
+  <section class="exercise" aria-labelledby="exercise-heading">
+    <h2 id="exercise-heading">Exercise</h2>
+
+    <div class="spec-part">
+      <span class="spec-label">Requirement</span>
+      <p>Extend the one command so that it proves a backfill composes: the same
+      window, extracted as two adjacent halves in two separate runs, must leave
+      the warehouse in exactly the state one whole-window run leaves it in.</p>
+    </div>
+
+    <dl class="spec-list">
+      <dt>Input</dt>
+      <dd>The pipeline and the assertion as they stand. A window of
+      <code>[2026-02-01T00:00:00Z, 2026-06-15T00:00:00Z)</code> holding 1116
+      orders over 134 days, and a source with orders on both sides of it.</dd>
+
+      <dt>Output</dt>
+      <dd>One command, unchanged in name and location, whose output states
+      whether the halves composed. It remains a single command from the
+      repository root and prints the evidence — the counts, and which days
+      differed if any did.</dd>
+
+      <dt>Interface surface</dt>
+      <dd>The functions already in <code>tests/assert_pipeline_kpis.py</code>:
+      <code>expected_daily_kpis()</code>, <code>trigger_and_wait()</code>,
+      <code>read_fact_table()</code>, <code>read_raw_counts()</code>,
+      <code>compare()</code>, <code>digest()</code>, and the Airflow REST client
+      (<code>api_get</code>, <code>api_request</code>). Add whatever else the
+      proof needs, but keep the run-configuration contract: both bounds always
+      travel together in the run <code>conf</code>.</dd>
+
+      <dt>Constraints</dt>
+      <dd>
+        <ul>
+          <li>Still one command. Do not create a second assertion file, and do
+          not add a second entry point — the whole point of the seam is that
+          there is one thing to run.</li>
+          <li>The two halves must be adjacent and non-empty, and the split point
+          must fall on a day the source generates orders for, so that the
+          boundary is exercised rather than skipped.</li>
+          <li>Each half's run must be able to see the other half's effect. Any
+          preparation that resets the warehouse between the two runs defeats the
+          exercise, and the assertion must not do it silently — a step that
+          discards state is a step a reader has to be told about.</li>
+          <li>State equality, not digest equality. Compare what the warehouse
+          holds, so that a difference is reported as a difference in days and
+          rows rather than as two opaque strings.</li>
+          <li>The expectation stays independent. The two halves are checked
+          against values computed from the source, not against the whole-window
+          run's output, or the comparison would be circular.</li>
+          <li>The DAG is not yours to change. No edit to
+          <code>dags/pipeline/</code> or to the dbt project may be needed, and if
+          one turns out to be needed, that is a finding about the exercise, not
+          an invitation to make it.</li>
+          <li>Externally observable only, as before: no reading a DAG file, no
+          importing a pipeline module, no searching a file for a string.</li>
+        </ul>
+      </dd>
+    </dl>
+
+    <div class="spec-part">
+      <span class="spec-label">How you know it passes</span>
+      <p>Three runs of the one command, and three things to read off the output.
+      All three must hold, and the first two must already hold today — if they
+      do not, something upstream of this exercise is wrong and worth finding
+      first.</p>
+
+      <pre><code><span class="cmt"># 1. The command still passes end to end, and is still deterministic:</span>
+.venv/Scripts/python tests/assert_pipeline_kpis.py   <span class="cmt"># exits 0</span>
+
+<span class="cmt"># 2. Re-run it. The expected, first-run, second-run and halves digest</span>
+<span class="cmt">#    are all the same string, and the command takes no flags and no</span>
+<span class="cmt">#    arguments to make that true.</span>
+
+<span class="cmt"># 3. Break the composability on purpose and watch it fail for the</span>
+<span class="cmt">#    right reason: make the extraction append instead of upsert, or</span>
+<span class="cmt">#    give one model a filter that quietly drops a day, and confirm the</span>
+<span class="cmt">#    output names the day and the column. Then put it back.</span></code></pre>
+    </div>
+  </section>
+
+  <div class="built">
+    <span class="built-label">What was just built</span>
+    <p>One command that runs the nightly pipeline twice over a known window and
+    proves the daily KPIs in the warehouse are correct — computed from the source
+    rather than from the models — and unchanged by the second run, on top of the
+    staging, intermediate and mart layers it checks and the extraction window
+    that feeds them.</p>
+  </div>
+
+  <div class="source">
+    <span class="source-label">Primary source</span>
+    <p>The claim that this is a test worth writing, and the claim that a re-run
+    must produce the same outcome, both come from the
+    <a href="https://airflow.apache.org/docs/apache-airflow/stable/best-practices.html">Airflow
+    best practices doc</a>, read at the pinned version <strong>3.3.2</strong>.
+    Under <em>Testing a Dag</em> it says DAGs should be treated as
+    production-level code with tests "to ensure that they produce expected
+    results", and it separates the layers this course keeps separate: unit tests
+    that call an operator directly, and <code>dag.test()</code>, which is "an
+    integration test" needing a metadata database and "not a substitute for the
+    unit tests above". Under <em>Creating a task</em> it gives the reason for
+    running twice — a task re-run must produce the same outcome, so "do not use
+    <code>INSERT</code> during a task re-run… Replace it with <code>UPSERT</code>"
+    — and it names <code>data_interval_start</code> as the partition to read and
+    write, which is the window this course extracts.</p>
+  </div>
+
+  <div class="next-source">
+    <span class="next-source-label">Read next</span>
+    <p>Read the <a href="https://docs.getdbt.com/best-practices">dbt best
+    practices</a>, and start with <em>How we structure our dbt projects</em> and
+    <em>Idempotence in dbt</em> — both are sections of that index. The second is
+    the closest thing in the vendor documentation to this lesson's subject and it
+    was not written for a course exercise; the first answers the question the
+    exercise raises. Stating one business rule twice, in two languages, forces
+    the question of where each statement belongs: which layer is allowed to decide
+    what a cancelled order means, and which layer is only allowed to add up what
+    that layer decided. That is the stg → int → fct split, and it is the reason
+    this project has three schemas rather than one.</p>
+  </div>
+
+  <div class="followup" id="before-you-move-on">
+    <span class="followup-label">Before you move on</span>
+    <p>The assertion proves the mart is right over 134 days, twice, and proves
+    nothing at all about the other 46 days the source contains, nor about any day
+    that arrives late tomorrow. Argue for one change to the window or the
+    expectation that would widen what this command can say — then name what it
+    would cost, and whether the cost lands on the assertion or on the pipeline.
+    If your answer is "it would only slow the command down", you have not thought
+    about it yet.</p>
+  </div>
+
+</main>
+
+<footer class="endmatter">
+  <p>Lesson 09 of Nightly. Open it directly — there is no build step and no
+  running toolchain. Shared stylesheet:
+  <a href="../assets/lesson.css"><code>assets/lesson.css</code></a>.</p>
+</footer>
+
+</div>
+</body>
+</html>

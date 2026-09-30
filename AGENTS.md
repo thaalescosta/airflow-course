@@ -43,6 +43,34 @@ The four test seams are:
 
 The **primary test seam** is **pipeline assertions (seam 3)** because the course is a continuous project and correctness is demonstrated by pipeline behavior across re-runs and backfills. Other seams support it.
 
+Concretely: seam 3 is `tests/assert_pipeline_kpis.py`, and it is **the** command —
+`.venv/Scripts/python tests/assert_pipeline_kpis.py`, from the repository root. It
+is also the onboarding gate. What "correct" means at that seam, and the rule that it
+asserts externally observable behaviour only, are written down in
+`reference/testing-seams.md`.
+
+### Later modules extend the primary seam; they do not add another one
+
+A module arriving after the pipeline assertion does not get its own end-to-end
+check. It is added to the existing one — a new model joins `DBT_MODELS`, a new mart
+column joins `KPI_COLUMNS` (and is then computed twice, once in SQL and once in
+Python, which is the cost of an independent expectation) — and the existing
+command's output changes because the pipeline now does more.
+
+The test for a proposed new check: if it broke, would the pipeline still be wrong in
+a way a reader would care about? If yes it belongs in the primary seam. If the only
+consequence is "a test would fail", it belongs at seams 1, 2 or 4. A new seam is a
+different decision and needs its own justification.
+
+### The rule is scoped to the primary seam
+
+At the primary seam, the assertion reads the warehouse and Airflow's report of the
+run it triggered; it does not import a pipeline module or search a file for a
+string, because a pipeline can otherwise be renamed into passing. That rule does
+**not** make seam 2 a taboo — `tests/test_orders_ingestion.py` calls pure functions
+directly and asserts their SQL, and `ON CONFLICT (order_id) DO UPDATE` genuinely is
+part of the contract with the database. The rule scopes a whole-pipeline assertion.
+
 ## Settled ADRs (not to be re-litigated)
 
 The following seven ADRs in `docs/adr/` are settled and not up for re-litigation without cause:

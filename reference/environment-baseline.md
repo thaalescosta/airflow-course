@@ -39,11 +39,13 @@ way to make room for the Astro project.
 `astro dev start` in Docker mode is not a foreground command — it returns once
 the webserver reports healthy, bounded by `--wait`. It will not hang a session.
 
-The resulting stack is **seven** containers, not the five the generated
-`README.md` claims: `postgres`, `warehouse-postgres` (the course's own
-application warehouse, added by `docker-compose.override.yml` — see §7),
-`db-migration` (one-shot, runs then exits), `scheduler`, `dag-processor`,
-`api-server`, `triggerer`. Six of them stay up; `db-migration` exits.
+The resulting stack is **eight** containers, not the five the generated
+`README.md` claims: `postgres`, `warehouse-postgres` and `orders-api` (both added
+by `docker-compose.override.yml` — see §7), `db-migration` (one-shot, runs then
+exits), `scheduler`, `dag-processor`, `api-server`, `triggerer`. Seven of them stay
+up; `db-migration` exits. Note that `orders-api` is built from a sibling checkout
+rather than pulled, so a fresh machine has one extra step before the stack comes
+up; §7 says where it lives.
 
 ```
 ➤ Airflow UI: http://localhost:8080
@@ -325,3 +327,84 @@ curl -s -H "Authorization: Bearer $TOK" 'http://localhost:8080/api/v2/dags'
 ```
 
 So `airflow dags list` and the UI can disagree. The UI is the one to trust.
+
+## 8. In Airflow 3, `schedule="@daily"` is not a data interval
+
+The single most expensive surprise in the course, found by a scheduled run rather
+than by a test, and worth writing down because the string looks like it means what
+it says.
+
+`schedule="@daily"` resolves to **`CronTriggerTimetable`**, whose data interval is a
+single instant. Measured inside the container:
+
+```sh
+docker exec airflow-course_d896a3-scheduler-1 python -c "
+import datetime; from airflow.timetables.trigger import CronTriggerTimetable
+from airflow.timetables.interval import CronDataIntervalTimetable
+for tt in (CronTriggerTimetable('0 0 * * *', timezone='UTC'),
+           CronDataIntervalTimetable('0 0 * * *', timezone='UTC')):
+    print(type(tt).__name__, tt.infer_manual_data_interval(
+        run_after=datetime.datetime(2026,10,1,tzinfo=datetime.timezone.utc)))"
+# CronTriggerTimetable      DataInterval(start=2026-10-01 00:00:00+00:00, end=2026-10-01 00:00:00+00:00)
+# CronDataIntervalTimetable DataInterval(start=2026-09-30 00:00:00+00:00, end=2026-10-01 00:00:00+00:00)
+```
+
+A pipeline that extracts "the window between `data_interval_start` and
+`data_interval_end`" therefore gets `start == end` on every scheduled run and
+raises before reading a row:
+
+```
+ValueError: created_after must be earlier than created_before
+  File ".../dags/pipeline/nightly_order_kpis.py", line 81, in extract_and_load_orders
+  File ".../dags/pipeline/orders_extract.py", line 124, in select_window
+```
+
+`CronDataIntervalTimetable` triggers at the same midnight and gives the interval
+[2026-09-30, 2026-10-01), so the run labelled 2026-10-01 extracts 2026-09-30. That
+is what `dags/pipeline/intervals.py` declares, and both nightly DAGs use it.
+
+It survived as long as it did because it cannot show up in the obvious checks. The
+damage is only in the **metadatabase**, not in a parse:
+
+```sh
+docker exec airflow-course_d896a3-postgres-1 psql -U postgres -d postgres \
+  -c "select run_id, run_type, data_interval_start, data_interval_end, state \
+      from dag_run where dag_id='pipeline_nightly_order_kpis';"
+#   run_id                                | run_type  |      logical_date      |   data_interval_start   |   data_interval_end   |  state
+# ----------------------------------------+-----------+------------------------+-------------------------+------------------------+---------
+#  manual_1790782322                     | manual    | 2026-02-01 00:00:00+00 | 2026-02-01 00:00:00+00 | 2026-02-01 00:00:00+00 | success
+#  scheduled__2026-09-30T00:00:00+00:00   | scheduled | 2026-09-30 00:00:00+00 | 2026-09-30 00:00:00+00 | 2026-09-30 00:00:00+00 | failed
+```
+
+Both rows have `start == end` — including the successful one, because a **manual**
+run passes only when its window comes from `conf`, so the interval is never read.
+A DAG can be unpaused, import cleanly, render nine tasks, and pass every check you
+trigger by hand while failing every single night.
+
+Two consequences for how the course asserts things. `tests/assert_pipeline_kpis.py`
+triggers with an explicit window and then reads back *the run's own reported
+window* rather than assuming it, because the two are the same thing only by
+agreement. And a scheduled run is a distinct behaviour from a manual one, which is
+why the regression test in `tests/test_orders_ingestion.py` asserts the timetable's
+interval directly instead of asserting it through a run.
+
+## 9. The Astro CLI is one release behind the pin in §1
+
+| | Version | Source |
+| --- | --- | --- |
+| §1's install command | **1.46.0** | `winget install -e --id Astronomer.Astro -v 1.46.0` |
+| What is installed here | **1.45.0** | `astro version`; `winget list --id Astronomer.Astro` reports `1.45.0  1.46.0` |
+| Release date of 1.46.0 | **2026-09-29**, one day before this measurement | the GitHub release for `v1.46.0` |
+
+§1's command was therefore written against a release that landed after this stack
+was built. The discrepancy is recorded rather than quietly closed, and the upgrade
+is deferred on purpose: the `v1.46.0` changelog contains *"Bump local Postgres to
+15 and pin existing projects to their version"*, which changes the compose model
+this repository's `docker-compose.override.yml` is merged into (§6, §7). That is a
+deliberate, re-verified step — rebuild the stack, re-run
+`tests/assert_pipeline_kpis.py`, re-capture `reference/generated-compose.json` — and
+not something to do as a side effect of writing a lesson.
+
+ADR 0004's pin is on the *runtime image*, and that is unaffected: the container
+still reports `3.3.1+astro.4`. §5's version gap is a different thing and still
+stands — that one is about Airflow's patch line, not about the CLI.
