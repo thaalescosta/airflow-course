@@ -9,3 +9,6 @@
 # the image already ships, so installing it changes nothing about the tested
 # image composition.
 psycopg2-binary==2.9.12
+astronomer-cosmos==1.15.1
+dbt-core==1.12.5
+dbt-postgres==1.11.0
