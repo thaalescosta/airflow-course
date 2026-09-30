@@ -1,1 +1,11 @@
 # Astro Runtime includes the following pre-installed providers packages: https://www.astronomer.io/docs/astro/runtime-image-architecture#provider-packages
+
+# Exact pins only (ADR 0004). No ranges.
+#
+# psycopg2-binary 2.9.12 is the driver dags/pipeline/ reaches the course
+# warehouse with. It is already present in runtime:3.3-7 as a transitive
+# dependency; it is declared here so that it is a deliberate, pinned choice
+# rather than an accident of somebody else's resolve. The pin matches what
+# the image already ships, so installing it changes nothing about the tested
+# image composition.
+psycopg2-binary==2.9.12

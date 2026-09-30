@@ -39,9 +39,11 @@ way to make room for the Astro project.
 `astro dev start` in Docker mode is not a foreground command — it returns once
 the webserver reports healthy, bounded by `--wait`. It will not hang a session.
 
-The resulting stack is **six** containers, not the five the generated
-`README.md` claims: `postgres`, `db-migration` (one-shot, runs then exits),
-`scheduler`, `dag-processor`, `api-server`, `triggerer`.
+The resulting stack is **seven** containers, not the five the generated
+`README.md` claims: `postgres`, `warehouse-postgres` (the course's own
+application warehouse, added by `docker-compose.override.yml` — see §7),
+`db-migration` (one-shot, runs then exits), `scheduler`, `dag-processor`,
+`api-server`, `triggerer`. Six of them stay up; `db-migration` exits.
 
 ```
 ➤ Airflow UI: http://localhost:8080
@@ -205,3 +207,121 @@ python reference/capture-compose.py > reference/generated-compose.json
 
 The `Dockerfile` needs no such treatment — `astro dev init` writes it, it is
 committed, and it is one line: `FROM astrocrpublic.azurecr.io/runtime:3.3-7`.
+
+## 7. The course warehouse is a second Postgres, not Astro's
+
+`docker-compose.override.yml` adds one service, `warehouse-postgres`, to the
+stack. `astro dev start` merges that file into the in-memory compose model it
+builds (§6). Astro's own `postgres` remains the **metadata** database: it
+holds `dag`, `task_instance`, `dag_run`, `connection` and the rest, it is
+owned by the `db-migration` one-shot, and in Airflow 3 task code may not
+write to it. The warehouse is a different engine, kept apart on every axis:
+
+| | metadata database | course warehouse |
+| --- | --- | --- |
+| service | `postgres` | `warehouse-postgres` |
+| database | `postgres` | `warehouse` |
+| role | `postgres` | `warehouse` |
+| host port | 5432 | 5433 |
+| volume | `postgres_data` | `warehouse_data` |
+| image | `docker.io/postgres:15` (floating) | `docker.io/postgres:15.14-alpine3.22` (pinned) |
+| reached by | Airflow internals | the `warehouse_default` connection, from task code |
+
+Reusing Astro's Postgres would be a course-simplification that teaches the
+wrong thing: pipeline tables would sit beside `dag_run` and `connection` in
+one database, so an `astro dev kill --volumes` or a stray
+`DROP SCHEMA public CASCADE` would destroy the warehouse, and the lesson
+"Airflow 3 forbids task code to write the metadata DB" would be demonstrated
+by the code violating it. In production the warehouse is a managed engine
+(BigQuery/Snowflake/Redshift) and the credential comes from a secrets backend
+rather than a local container's env var.
+
+### Two things about the override file that are not guessable
+
+Both were found the hard way; re-verify rather than trust.
+
+**1. A service added by the override needs `networks: [airflow]`.** The base
+model declares its network under the *key* `airflow`, which is why the network
+is created as `<project>_<hash>_airflow`. An override service that omits
+`networks` is placed on a second, auto-created network
+(`<project>_<hash>_default`) that the Airflow containers are not attached to,
+and the failure is a DNS error, not a connectivity error:
+
+```sh
+docker exec airflow-course_d896a3-scheduler-1 \
+  python -c "import socket; print(socket.gethostbyname('warehouse-postgres'))"
+# gaierror: [Errno -2] Name or service not known
+```
+
+Referencing the key `airflow` keeps the project-path hash out of the file, so
+it survives a re-clone to a different directory. Do **not** set
+`container_name` on this service: it replaces the service name as the network
+alias, which is the very name the Airflow containers resolve.
+
+**2. `${VAR}` is not interpolated from the project's `.env`.** Astro builds the
+compose model in-process with compose-go, not by shelling out to the compose
+CLI, and it does not load `.env` into the environment it interpolates from. A
+`${WAREHOUSE_PG_PASSWORD:?...}` in the override therefore fails in a fresh
+shell, even though `.env` is right there and correct:
+
+```
+Error: error creating docker-compose project: failed to load project: error
+while interpolating services.warehouse-postgres.environment.POSTGRES_PASSWORD:
+required variable WAREHOUSE_PG_PASSWORD is missing a value
+```
+
+It *does* pass if the variable happens to be exported in the invoking shell,
+which is exactly what makes it a trap: the fix appears to work on the machine
+where it was found. The password is therefore mounted as a Docker secret
+instead — `POSTGRES_PASSWORD_FILE: /run/secrets/warehouse_pg_password`, read
+from `./.secrets/warehouse_pg_password` (gitignored, and in `.dockerignore` so
+it cannot reach the image build context).
+
+### The connection, and where the secret is allowed to be visible
+
+Seeded out of band with the Airflow 3 CLI, never in a DAG file:
+
+```sh
+docker exec airflow-course_d896a3-api-server-1 airflow connections add \
+  warehouse_default --conn-type postgres --conn-host warehouse-postgres \
+  --conn-port 5432 --conn-schema warehouse --conn-login warehouse \
+  --conn-password "$PW"
+# Successfully added `conn_id`=warehouse_default : generic://warehouse:******@warehouse-postgres:5432/warehouse
+```
+
+Read in task code with `airflow.sdk.Connection.get(conn_id)`. Three measured
+things about the secret's visibility, all inside a container:
+
+- `airflow connections list` masks it (`generic` type, no password shown).
+- `airflow connections get` **prints it in cleartext**, table and `-o json`.
+  With DB access the CLI can read what Fernet encrypted; the encryption stops
+  the value at rest, not an admin with the metadata DB.
+- `Connection.get()` called *outside* a task raises
+  `AirflowNotFoundException: The conn_id 'warehouse_default' isn't defined`.
+  The Task SDK resolves connections through the task's execution context over
+  the Execution API, so outside a task there is nothing to resolve them
+  against. This is the Airflow 3 boundary, observed rather than quoted.
+
+### One stale row to expect in `airflow dags list`
+
+`airflow dags list` shows `example_astronauts`
+(`/usr/local/airflow/dags/exampledag.py`) although no such file exists in the
+repo or in the container — `dags/` is a bind mount of the repository's `dags/`,
+and `exampledag.py` is in neither. It is a leftover `dag` table row from an
+earlier run, re-parsed before the file was removed:
+
+```sh
+docker exec airflow-course_d896a3-postgres-1 psql -U postgres -d postgres \
+  -t -A -F' | ' -c "select dag_id, fileloc, last_parsed_time from dag order by dag_id;"
+# example_astronauts | /usr/local/airflow/dags/exampledag.py | 2026-09-30 05:09:08+00
+```
+
+The API the UI actually renders is not affected — it reads the live bundle and
+reports only real DAGs:
+
+```sh
+curl -s -H "Authorization: Bearer $TOK" 'http://localhost:8080/api/v2/dags'
+# total: 1  ->  pipeline_warehouse_connection_check
+```
+
+So `airflow dags list` and the UI can disagree. The UI is the one to trust.

@@ -1,0 +1,69 @@
+# Course application warehouse.
+#
+# Astro already runs a Postgres for Airflow's own metadata database. That is a
+# different engine with a different job: it holds dag_run, task_instance,
+# dag_file, connection and the other Airflow tables, it is owned by Airflow's
+# db-migration one-shot, and in Airflow 3 task code is forbidden from writing
+# to it. It is not a warehouse and pipeline tables must never land in it.
+#
+# The course's warehouse holds pipeline data only. It is kept separate on
+# every axis that makes the two tellable apart:
+#
+#   service name   warehouse-postgres  vs  postgres
+#   database       warehouse          vs  postgres
+#   role           warehouse          vs  postgres
+#   host port      5433               vs  5432
+#   volume         warehouse_data     vs  postgres_data
+#   secret         warehouse_pg_password (file) vs  none
+#   conn_id        warehouse_default  vs  (Airflow's own connections)
+#
+# No `container_name` is set on purpose: it would replace the service name as
+# the network alias, and `warehouse-postgres` is the hostname the Airflow
+# containers resolve.
+#
+# `astro dev start` merges this file into the in-memory compose model it
+# builds. Nothing here replaces an Airflow service, so the stack still comes
+# up as the documented shape plus this one container.
+#
+# Course simplification, stated plainly: in production the warehouse is a
+# managed engine (BigQuery, Snowflake, Redshift) and the credential arrives
+# from a secrets backend, not from a local container's env var. Two things
+# would differ: the engine is operated by someone else, and the password is
+# rotated by that operator rather than by `POSTGRES_PASSWORD` here.
+services:
+  warehouse-postgres:
+    image: docker.io/postgres:15.14-alpine3.22
+    environment:
+      POSTGRES_USER: warehouse
+      POSTGRES_DB: warehouse
+      # Read from a bind-mounted secret rather than interpolated from .env:
+      # `astro dev start` builds its compose model in-process and does not
+      # resolve ${VAR} from the project's .env, so interpolation here would
+      # only work in a shell that happened to export the variable first.
+      POSTGRES_PASSWORD_FILE: /run/secrets/warehouse_pg_password
+    secrets:
+      - warehouse_pg_password
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - warehouse_data:/var/lib/postgresql/data
+    # Join the network the Airflow containers are already on. `airflow` is the
+    # *key* the base model declares, which is why the network is created as
+    # <project>_<hash>_airflow; referencing the key keeps this file free of
+    # the project-path hash, so it survives a re-clone to a different
+    # directory. Without this the service lands on a second, Airflow-invisible
+    # network and `warehouse-postgres` will not resolve.
+    networks:
+      - airflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warehouse -d warehouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+secrets:
+  warehouse_pg_password:
+    file: ./.secrets/warehouse_pg_password
+
+volumes:
+  warehouse_data:

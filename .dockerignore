@@ -1,6 +1,7 @@
 astro
 .git
 .env
+.secrets
 airflow_settings.yaml
 logs/
 .venv
